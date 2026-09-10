@@ -21,7 +21,7 @@ Every step in the pipeline is its own module, in order.
 ## Layout
 
 ```
-RAG_file/
+rag/
 ├── config.py            all settings, read from .env
 ├── ingest.py            CLI: run steps 1-6 over a PDF
 ├── ask.py               CLI: run steps 7-11 (one-shot or interactive)
