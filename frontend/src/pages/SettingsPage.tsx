@@ -1,8 +1,10 @@
 import { useState } from 'react'
-import { KeyRound, Save, RotateCcw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { KeyRound, Save, RotateCcw, Check } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Field, Input, Select } from '../components/ui/Field'
 import { useToast } from '../components/ui/Toast'
+import { PLANS, usePlan } from '../lib/plan'
 
 interface Config {
   llmProvider: string
@@ -43,11 +45,14 @@ const SECTIONS = [
   { id: 'providers', label: 'Providers & Models' },
   { id: 'vector', label: 'Qdrant & Collection' },
   { id: 'retrieval', label: 'Chunking & Retrieval' },
+  { id: 'plan', label: 'Plan & Billing' },
   { id: 'secrets', label: 'Secrets' },
 ]
 
 export default function SettingsPage() {
   const toast = useToast()
+  const navigate = useNavigate()
+  const { plan, changePlan } = usePlan()
   const [cfg, setCfg] = useState<Config>(load)
   const [active, setActive] = useState('providers')
 
@@ -259,6 +264,83 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {active === 'plan' && (
+            <div className="card settings-section">
+              <h3>Plan &amp; Billing</h3>
+              <div className="usage__head">
+                <span className="usage__plan">
+                  Current plan: <strong>{PLANS[plan].name}</strong>
+                </span>
+                <span className="pill pill--ok">
+                  <span className="pill__dot" />
+                  {PLANS[plan].name} · active
+                </span>
+              </div>
+
+              <div className="secret-note">
+                <KeyRound />
+                <span>
+                  Billing is not implemented yet. There is no Stripe integration,
+                  no subscription backend and no invoices — switching plans here
+                  only updates this browser so the product experience can be
+                  explored. Real payments are planned for a future release.
+                </span>
+              </div>
+
+              <div className="plan-picker">
+                {(['free', 'pro', 'team'] as const).map((id) => {
+                  const p = PLANS[id]
+                  const current = plan === id
+                  return (
+                    <div
+                      key={id}
+                      className={`plan${id === 'pro' ? ' plan--pro' : ''}${
+                        id === 'team' ? ' plan--team' : ''
+                      }`}
+                      style={{ padding: 'var(--sp-5)' }}
+                    >
+                      <span className="plan__name">{p.name}</span>
+                      <div className="plan__price">
+                        <span className="plan__amount" style={{ fontSize: '1.8rem' }}>
+                          ${p.priceMonthly}
+                        </span>
+                        <span className="plan__period">/ month</span>
+                      </div>
+                      <ul className="plan__features" style={{ marginTop: 'var(--sp-3)' }}>
+                        {p.features.slice(0, 4).map((f) => (
+                          <li key={f}>
+                            <Check size={15} />
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
+                      <Button
+                        variant={current || id === 'free' ? 'secondary' : 'primary'}
+                        block
+                        disabled={current}
+                        onClick={() => {
+                          changePlan(id)
+                          toast(
+                            'ok',
+                            id === 'free'
+                              ? 'Switched to the Free plan (demo).'
+                              : `Switched to ${p.name} (demo — no payment processed).`,
+                          )
+                        }}
+                      >
+                        {current ? 'Current plan' : `Switch to ${p.name}`}
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <Button variant="ghost" onClick={() => navigate('/pricing')}>
+                View full pricing &amp; comparison
+              </Button>
+            </div>
+          )}
+
           {active === 'secrets' && (
             <div className="card settings-section">
               <h3>Secrets</h3>
@@ -279,16 +361,18 @@ export default function SettingsPage() {
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
-            <Button onClick={save}>
-              <Save size={15} />
-              Save preferences
-            </Button>
-            <Button variant="secondary" onClick={reset}>
-              <RotateCcw size={15} />
-              Reset to defaults
-            </Button>
-          </div>
+          {active !== 'plan' && active !== 'secrets' && (
+            <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
+              <Button onClick={save}>
+                <Save size={15} />
+                Save preferences
+              </Button>
+              <Button variant="secondary" onClick={reset}>
+                <RotateCcw size={15} />
+                Reset to defaults
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>

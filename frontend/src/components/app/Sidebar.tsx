@@ -68,7 +68,7 @@ export default function Sidebar({
       <div className="sidebar__foot">
         <a
           className="navlink"
-          href="https://github.com/your-org/rag-starter"
+          href="https://github.com/shamiulriyad/rag-kit"
           target="_blank"
           rel="noreferrer noopener"
         >

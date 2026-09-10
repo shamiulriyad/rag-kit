@@ -9,10 +9,11 @@ const LINKS = [
   { label: 'Features', href: '#features' },
   { label: 'How It Works', href: '#how' },
   { label: 'Architecture', href: '#architecture' },
+  { label: 'Pricing', href: '/pricing' },
   { label: 'Documentation', href: '/docs' },
 ]
 
-const GITHUB_URL = 'https://github.com/your-org/rag-starter'
+const GITHUB_URL = 'https://github.com/shamiulriyad/rag-kit'
 
 export default function MarketingNav() {
   const [scrolled, setScrolled] = useState(false)

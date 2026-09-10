@@ -983,6 +983,16 @@ table.data td .doc-name {
   min-width: 44px;
   text-align: right;
 }
+.plan-picker {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-4);
+}
+@media (max-width: 900px) {
+  .plan-picker {
+    grid-template-columns: 1fr;
+  }
+}
 @media (max-width: 860px) {
   .settings-grid {
     grid-template-columns: 1fr;
@@ -1089,4 +1099,186 @@ table.data td .doc-name {
 }
 .toast--err svg {
   color: var(--danger);
+}
+
+/* ---- Upgrade dialog ---- */
+.modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: rgba(4, 7, 11, 0.66);
+  backdrop-filter: blur(3px);
+  display: grid;
+  place-items: center;
+  padding: var(--sp-5);
+  animation: fadein var(--dur) var(--ease);
+}
+@keyframes fadein {
+  from {
+    opacity: 0;
+  }
+}
+.modal {
+  position: relative;
+  width: min(420px, 100%);
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-lg);
+  padding: var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  box-shadow: var(--shadow-lg);
+  animation: slidein var(--dur) var(--ease);
+}
+.modal__close {
+  position: absolute;
+  top: var(--sp-3);
+  right: var(--sp-3);
+}
+.modal__icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-md);
+  background: var(--primary-soft);
+  color: #c9b6f7;
+  border: 1px solid var(--primary-ring);
+}
+.modal__icon svg {
+  width: 20px;
+  height: 20px;
+}
+.modal__icon--team {
+  background: var(--accent-soft);
+  color: #7fdfeb;
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+.modal__grid {
+  list-style: none;
+  margin: 0;
+  padding: var(--sp-3) var(--sp-4);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-2) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.modal__grid li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.modal__grid svg {
+  color: var(--success);
+  flex-shrink: 0;
+}
+@media (max-width: 420px) {
+  .modal__grid {
+    grid-template-columns: 1fr;
+  }
+}
+.modal h3 {
+  font-size: 1.1rem;
+}
+.modal p {
+  font-size: 0.88rem;
+}
+.modal__usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.modal__usage-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--text-muted);
+}
+.modal__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+.modal__actions .btn--sm {
+  align-self: center;
+}
+
+/* ---- Plan usage panel (dashboard) ---- */
+.usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+.usage__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.usage__plan {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+.usage__meter {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.usage__meter-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+.usage__meter-top b {
+  color: var(--text);
+  font-weight: 600;
+}
+.usage__bar {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--border);
+  overflow: hidden;
+}
+.usage__bar > i {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: linear-gradient(90deg, var(--primary), var(--accent));
+}
+.usage__bar--warn > i {
+  background: linear-gradient(90deg, var(--warning), var(--danger));
+}
+
+/* Small inline usage chip (documents toolbar) */
+.usage-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.usage-chip b {
+  color: var(--text);
+  font-family: var(--font-mono);
+}
+.usage-chip--full b {
+  color: var(--warning);
 }

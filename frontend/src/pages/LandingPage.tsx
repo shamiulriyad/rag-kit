@@ -18,12 +18,13 @@ import { GithubIcon } from '../components/ui/icons'
 import MarketingNav from '../components/marketing/MarketingNav'
 import MarketingFooter from '../components/marketing/MarketingFooter'
 import PipelineFlow from '../components/marketing/PipelineFlow'
+import PricingPlans from '../components/marketing/PricingPlans'
 import Badge from '../components/ui/Badge'
 import { LinkButton } from '../components/ui/Button'
 import StatusPill from '../components/ui/StatusPill'
 import { formatNumber } from '../lib/format'
 
-const GITHUB_URL = 'https://github.com/your-org/rag-starter'
+const GITHUB_URL = 'https://github.com/shamiulriyad/rag-kit'
 
 const FEATURES = [
   {
@@ -405,7 +406,7 @@ export default function LandingPage() {
               <div className="terminal__body">
                 <div>
                   <span className="c-prompt">$ </span>
-                  <span className="c-cmd">git clone https://github.com/your-org/rag-starter</span>
+                  <span className="c-cmd">git clone https://github.com/shamiulriyad/rag-kit</span>
                 </div>
                 <div>
                   <span className="c-prompt">$ </span>
@@ -430,6 +431,13 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Pricing */}
+      <section className="section" id="pricing">
+        <div className="container">
+          <PricingPlans />
         </div>
       </section>
 

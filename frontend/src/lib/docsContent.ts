@@ -17,8 +17,8 @@ export const docsPages: DocPage[] = [
 
 ## Quick start
 \`\`\`bash
-git clone https://github.com/your-org/rag-starter
-cd rag-starter
+git clone https://github.com/shamiulriyad/rag-kit
+cd rag-kit
 cp .env.example .env      # then edit .env
 docker compose up -d
 \`\`\`

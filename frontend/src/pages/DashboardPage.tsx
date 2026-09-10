@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import StatCard from '../components/ui/StatCard'
 import StatusPill from '../components/ui/StatusPill'
+import PlanUsageCard from '../components/app/PlanUsageCard'
 import { checkHealth } from '../services/api'
 import {
   mockDocuments,
@@ -65,6 +66,8 @@ export default function DashboardPage() {
           delta={{ text: 'stable', trend: 'flat' }}
         />
       </div>
+
+      <PlanUsageCard />
 
       <div className="grid-2">
         <section className="card">

@@ -638,3 +638,284 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ============================================================================
+   Pricing & Plans
+   ========================================================================= */
+.pricing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-6);
+}
+.pricing__trust {
+  margin-top: var(--sp-2);
+  font-size: 0.84rem;
+  color: var(--text);
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+}
+
+.pricing__toggle {
+  display: inline-flex;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  gap: 4px;
+}
+.pricing__toggle button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 18px;
+  border: none;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 600;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.pricing__toggle button.is-active {
+  background: var(--card);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+.pricing__save {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--success);
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 35%, transparent);
+  padding: 2px 7px;
+  border-radius: var(--r-pill);
+}
+
+.plans {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 360px));
+  gap: var(--sp-5);
+  width: 100%;
+  justify-content: center;
+  align-items: stretch;
+}
+.plans--3 {
+  grid-template-columns: repeat(3, minmax(0, 340px));
+  gap: var(--sp-4);
+}
+.plan {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  height: 100%;
+  padding: var(--sp-6);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--card);
+}
+.plan--pro {
+  border-color: var(--primary);
+  box-shadow: var(--glow-primary);
+  background: linear-gradient(180deg, var(--primary-soft), transparent 40%),
+    var(--card);
+}
+.plan--team {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: linear-gradient(180deg, var(--accent-soft), transparent 36%),
+    var(--card);
+  transition: transform var(--dur) var(--ease), border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+}
+.plan--team:hover {
+  transform: translateY(-4px);
+  border-color: var(--accent);
+  box-shadow: 0 20px 48px -22px rgba(6, 182, 212, 0.45);
+}
+.plan--team .plan__name {
+  color: #7fdfeb;
+}
+.plan--team .plan__cta:hover {
+  --btn-bg: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.plan__badge {
+  position: absolute;
+  top: -13px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(120deg, var(--primary), var(--accent));
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+.plan__head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.plan__name {
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.plan--pro .plan__name {
+  color: #c9b6f7;
+}
+.plan__label {
+  position: absolute;
+  top: -11px;
+  left: var(--sp-5);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  color: #7fdfeb;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.plan__blurb {
+  font-size: 0.84rem;
+  min-height: 2.4em;
+}
+.plan__price {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-top: var(--sp-2);
+}
+.plan__amount {
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--text);
+}
+.plan__period {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+.plan__note {
+  font-size: 0.78rem;
+  color: var(--text-faint);
+  min-height: 1.2em;
+}
+.plan__tagline {
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+.plan__cta {
+  margin-block: var(--sp-3);
+}
+.plan__features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-4);
+}
+.plan__features li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+.plan__features svg {
+  color: var(--success);
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.compare-wrap {
+  width: 100%;
+  max-width: 760px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+}
+table.compare {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  min-width: 520px;
+}
+table.compare--3 {
+  min-width: 640px;
+}
+table.compare th,
+table.compare td {
+  padding: 13px 18px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+table.compare thead th {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  background: var(--surface);
+}
+table.compare tbody tr:last-child td {
+  border-bottom: none;
+}
+table.compare td:first-child {
+  color: var(--text);
+  font-weight: 500;
+}
+table.compare td:not(:first-child),
+table.compare th:not(:first-child) {
+  text-align: center;
+  width: 22%;
+}
+table.compare--3 td:not(:first-child),
+table.compare--3 th:not(:first-child) {
+  width: 20%;
+}
+.compare__pro-col {
+  background: var(--primary-soft);
+}
+.compare__yes {
+  color: var(--success);
+  display: inline-flex;
+}
+.compare__no {
+  color: var(--text-faint);
+  display: inline-flex;
+}
+.pricing__disclaimer {
+  font-size: 0.78rem;
+  color: var(--text-faint);
+  text-align: center;
+  max-width: 520px;
+}
+
+/* Tablet & mobile: stack all pricing cards into one clean column */
+@media (max-width: 1024px) {
+  .plans,
+  .plans--3 {
+    grid-template-columns: 1fr;
+    max-width: 420px;
+  }
+}

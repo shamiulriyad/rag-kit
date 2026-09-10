@@ -12,15 +12,18 @@ import { Button } from '../components/ui/Button'
 import { Select } from '../components/ui/Field'
 import StatusPill from '../components/ui/StatusPill'
 import { useToast } from '../components/ui/Toast'
+import UpgradeDialog from '../components/app/UpgradeDialog'
 import { uploadPdf } from '../services/api'
 import { mockDocuments, type DocRecord, type DocStatus } from '../lib/mockData'
 import { formatBytes, relativeTime } from '../lib/format'
+import { usePlan } from '../lib/plan'
 
 const MAX_UPLOAD_MB = Number(import.meta.env.VITE_MAX_UPLOAD_MB ?? 200)
 
 export default function DocumentsPage() {
   const toast = useToast()
   const navigate = useNavigate()
+  const { limits, isFree } = usePlan()
   const inputRef = useRef<HTMLInputElement>(null)
   const [docs, setDocs] = useState<DocRecord[]>(mockDocuments)
   const [dragOver, setDragOver] = useState(false)
@@ -28,6 +31,9 @@ export default function DocumentsPage() {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<DocStatus | 'all'>('all')
   const [selected, setSelected] = useState<DocRecord | null>(null)
+  const [upgradeOpen, setUpgradeOpen] = useState(false)
+
+  const atDocLimit = isFree && docs.length >= limits.documents
 
   const filtered = useMemo(() => {
     return docs.filter((d) => {
@@ -38,6 +44,11 @@ export default function DocumentsPage() {
   }, [docs, query, statusFilter])
 
   async function ingest(file: File) {
+    if (atDocLimit) {
+      setUpgradeOpen(true)
+      if (inputRef.current) inputRef.current.value = ''
+      return
+    }
     if (!file.name.toLowerCase().endsWith('.pdf')) {
       toast('err', 'Only PDF files can be ingested.')
       return
@@ -180,6 +191,15 @@ export default function DocumentsPage() {
           <option value="processing">Processing</option>
           <option value="failed">Failed</option>
         </Select>
+        {isFree && (
+          <span className={`usage-chip${atDocLimit ? ' usage-chip--full' : ''}`}>
+            <FileText size={14} />
+            <b>
+              {docs.length} / {limits.documents}
+            </b>{' '}
+            documents · Free plan
+          </span>
+        )}
       </div>
 
       <div className="table-wrap">
@@ -275,6 +295,14 @@ export default function DocumentsPage() {
           </div>
         </div>
       )}
+
+      <UpgradeDialog
+        open={upgradeOpen}
+        onClose={() => setUpgradeOpen(false)}
+        title="You've reached your document limit."
+        usage={`${docs.length} / ${limits.documents} documents`}
+        message="Upgrade to Pro to add up to 50 documents, 10 GB of storage and 100,000 chunks."
+      />
     </div>
   )
 }

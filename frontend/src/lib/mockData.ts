@@ -15,6 +15,8 @@ export interface DocRecord {
   note?: string
 }
 
+// Three documents — the Free plan's limit — so the "3 / 3" upgrade prompt
+// demonstrates cleanly, while still covering ready / processing / failed states.
 export const mockDocuments: DocRecord[] = [
   {
     id: 'doc_eng_grammar',
@@ -35,24 +37,6 @@ export const mockDocuments: DocRecord[] = [
     uploadedAt: '2026-09-10T09:41:00Z',
   },
   {
-    id: 'doc_onboarding',
-    name: 'Employee-Onboarding-Handbook.pdf',
-    sizeBytes: 5_138_432,
-    pages: 132,
-    chunks: 486,
-    status: 'processing',
-    uploadedAt: '2026-09-11T08:55:00Z',
-  },
-  {
-    id: 'doc_research',
-    name: 'Retrieval-Augmented-Generation-Survey.pdf',
-    sizeBytes: 1_884_160,
-    pages: 41,
-    chunks: 133,
-    status: 'ready',
-    uploadedAt: '2026-09-08T17:20:00Z',
-  },
-  {
     id: 'doc_scanned',
     name: 'Scanned-Invoice-Batch-Q2.pdf',
     sizeBytes: 12_680_192,
@@ -63,6 +47,9 @@ export const mockDocuments: DocRecord[] = [
     note: 'This PDF appears to be scanned / image-based. OCR is required before indexing.',
   },
 ]
+
+/** Questions asked in the current billing month (drives Free-plan usage meters). */
+export const questionsThisMonth = 74
 
 export interface RecentQuestion {
   id: string

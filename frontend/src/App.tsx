@@ -14,6 +14,7 @@ import DocumentsPage from './pages/DocumentsPage'
 import ChatPage from './pages/ChatPage'
 import SettingsPage from './pages/SettingsPage'
 import DocsPage from './pages/DocsPage'
+import PricingPage from './pages/PricingPage'
 
 function GuestOnly({ children }: { children: ReactNode }) {
   const { user, ready } = useAuth()
@@ -21,11 +22,11 @@ function GuestOnly({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
-function DocsWithChrome() {
+function WithChrome({ children }: { children: ReactNode }) {
   return (
     <div className="marketing">
       <MarketingNav />
-      <DocsPage />
+      {children}
       <MarketingFooter />
     </div>
   )
@@ -35,7 +36,22 @@ export default function App() {
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
-      <Route path="/docs" element={<DocsWithChrome />} />
+      <Route
+        path="/docs"
+        element={
+          <WithChrome>
+            <DocsPage />
+          </WithChrome>
+        }
+      />
+      <Route
+        path="/pricing"
+        element={
+          <WithChrome>
+            <PricingPage />
+          </WithChrome>
+        }
+      />
 
       <Route
         path="/login"

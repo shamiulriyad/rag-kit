@@ -7,6 +7,7 @@ const COLS: { title: string; links: { label: string; to: string; ext?: boolean }
     links: [
       { label: 'Features', to: '/#features' },
       { label: 'How It Works', to: '/#how' },
+      { label: 'Pricing', to: '/pricing' },
       { label: 'Dashboard', to: '/dashboard' },
       { label: 'Knowledge Chat', to: '/chat' },
     ],
@@ -32,7 +33,7 @@ const COLS: { title: string; links: { label: string; to: string; ext?: boolean }
   {
     title: 'Resources',
     links: [
-      { label: 'GitHub', to: 'https://github.com/your-org/rag-starter', ext: true },
+      { label: 'GitHub', to: 'https://github.com/shamiulriyad/rag-kit', ext: true },
       { label: 'Qdrant Docs', to: 'https://qdrant.tech/documentation/', ext: true },
       { label: 'Gemini API', to: 'https://ai.google.dev/', ext: true },
       { label: 'License (MIT)', to: 'https://opensource.org/license/mit', ext: true },
