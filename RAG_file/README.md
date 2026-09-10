@@ -31,7 +31,8 @@ RAG_file/
 ├── data/                put your PDFs here (git-ignored)
 ├── rag/                 one module per pipeline step
 │   ├── step01_load_pdf.py … step11_answer.py
-│   └── pdf_font_repair.py   fixes broken subset-font encodings (used by step 2)
+│   ├── pdf_font_repair.py   fixes broken subset-font encodings (used by step 2)
+│   └── index_meta.py       records which embedding model built the collection
 ├── tests/
 │   └── test_bge.py
 └── qdrant_data/         embedded Qdrant store, created by ingest.py (git-ignored)
@@ -69,6 +70,36 @@ Or serve the same query pipeline over HTTP (what the .NET backend calls):
 ```bash
 uvicorn main:app --port 8000        # GET /health, POST /query {question, top_k?}
 ```
+
+## Embeddings
+
+Set the provider and model in `.env` only - nothing is hard-coded, and the
+vector size is detected automatically.
+
+| Goal | `EMBEDDING_PROVIDER` | `EMBEDDING_MODEL` | Notes |
+|------|--------------------|------------------|-------|
+| **Recommended default** | `google` | `gemini-embedding-001` | Needs `GOOGLE_API_KEY`. 3072-dim. Best for large PDFs on a CPU-only machine. |
+| Local, fast, English | `huggingface` | `sentence-transformers/all-MiniLM-L6-v2` | No API key. 384-dim. CPU handles a few-hundred-page PDF in a minute or two. |
+| Local, multilingual (incl. Bangla) | `huggingface` | `BAAI/bge-m3` | No API key. 1024-dim. Much heavier - minutes to tens of minutes on CPU. |
+
+**Why Gemini for a large PDF on a CPU-only machine:** a local model embeds every
+chunk on the CPU, which is slow and memory-hungry for a big document; the Gemini
+API does it remotely in batches, so ingestion stays fast without a GPU.
+
+**After changing `EMBEDDING_PROVIDER` or `EMBEDDING_MODEL` you must re-ingest
+with `--recreate`.** Vectors from two models are not comparable and usually have
+different sizes, so the old collection is unusable. The kit records which model
+built the collection (`.rag_index_meta.json`, git-ignored) and stops with a clear
+message if `.env` no longer matches:
+
+```bash
+python ingest.py --recreate
+```
+
+Invalid values are also caught early: an unknown `EMBEDDING_PROVIDER`, an unknown
+Gemini embedding model, a missing `GOOGLE_API_KEY`, an embedding-API failure, and
+a Qdrant vector-size mismatch each raise a one-line explanation instead of a
+library traceback.
 
 ## Notes
 

@@ -7,6 +7,7 @@
 import sys
 
 import config
+from rag import index_meta
 from rag.step05_embedding import get_embeddings
 from rag.step06_vector_store import get_vector_store
 from rag.step07_user_question import get_question
@@ -24,6 +25,7 @@ def answer_once(question: str, embeddings, vector_store, llm) -> dict:
 
 
 def main() -> None:
+    index_meta.check_before_query()                                 # model still matches the index?
     embeddings = get_embeddings()                                   # 5 (reused)
     vector_store = get_vector_store(embeddings)                     # 6 (read side)
     llm = get_llm()

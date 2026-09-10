@@ -16,6 +16,7 @@ from qdrant_client import QdrantClient
 from qdrant_client.http.models import Distance, VectorParams
 
 import config
+from rag import index_meta
 
 
 def get_client() -> QdrantClient:
@@ -43,6 +44,19 @@ def _reset_local_storage() -> None:
         print(f"    wiped local storage for '{config.COLLECTION_NAME}'")
 
 
+def _existing_vector_size(client: QdrantClient, name: str):
+    """Vector size of an existing collection, or None if it can't be read."""
+    try:
+        vectors = client.get_collection(name).config.params.vectors
+        if hasattr(vectors, "size"):
+            return vectors.size
+        if isinstance(vectors, dict) and vectors:
+            return next(iter(vectors.values())).size
+    except Exception:  # noqa: BLE001 - treat as "unknown"
+        return None
+    return None
+
+
 def ensure_collection(client: QdrantClient, dimension: int, recreate: bool = False) -> None:
     name = config.COLLECTION_NAME
     exists = client.collection_exists(name)
@@ -51,6 +65,16 @@ def ensure_collection(client: QdrantClient, dimension: int, recreate: bool = Fal
         client.delete_collection(name)
         exists = False
         print(f"    dropped old collection '{name}'")
+
+    if exists:
+        current_size = _existing_vector_size(client, name)
+        if current_size is not None and current_size != dimension:
+            raise RuntimeError(
+                f"Qdrant dimension mismatch: collection '{name}' stores "
+                f"{current_size}-dim vectors, but the current embedding model "
+                f"produces {dimension}-dim vectors.\n"
+                "Rebuild it with the new model:\n    python ingest.py --recreate"
+            )
 
     if not exists:
         client.create_collection(
@@ -69,12 +93,16 @@ def get_vector_store(embeddings, client: QdrantClient = None) -> QdrantVectorSto
 
 
 def store_chunks(chunks: List[Document], embeddings, recreate: bool = False) -> QdrantVectorStore:
+    # Refuse to append onto a collection built with a different model.
+    index_meta.check_before_ingest(recreate)
+
     # Must run before the client opens a file lock on the storage folder.
     if recreate:
         _reset_local_storage()
 
     client = get_client()
-    ensure_collection(client, detect_or_config_dim(embeddings), recreate=recreate)
+    dimension = detect_or_config_dim(embeddings)
+    ensure_collection(client, dimension, recreate=recreate)
     store = get_vector_store(embeddings, client)
 
     # Gemini caps a single embed call at 100 texts, so send in batches.
@@ -89,6 +117,9 @@ def store_chunks(chunks: List[Document], embeddings, recreate: bool = False) -> 
 
     count = client.count(config.COLLECTION_NAME, exact=True).count
     print(f"\n[6] Qdrant     : collection '{config.COLLECTION_NAME}' now holds {count} vectors")
+
+    # Remember what built this collection so a later model change is caught.
+    index_meta.save(dimension)
     return store
 
 

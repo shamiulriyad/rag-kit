@@ -31,15 +31,34 @@ CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", "150"))
 
 # --- Step 5: Embedding ---------------------------------------------------
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-# "huggingface" runs a local model - no API key, no quota, no cost.
-# "google" uses Gemini embeddings (needs a real API key with embedding quota).
-EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "huggingface").lower()
-EMBEDDING_MODEL = os.getenv(
-    "EMBEDDING_MODEL",
-    "sentence-transformers/all-MiniLM-L6-v2"
-    if EMBEDDING_PROVIDER == "huggingface"
-    else "models/gemini-embedding-001",
+
+# Which embedding backend to use. Set this in .env - it is never hard-coded.
+#   google      : Gemini embeddings (recommended). Needs GOOGLE_API_KEY with
+#                 embedding quota. Best for large PDFs on a CPU-only machine.
+#   huggingface : a local sentence-transformers model. No API key, no quota,
+#                 no cost, but CPU-bound.
+EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "google").strip().lower()
+
+KNOWN_PROVIDERS = ("google", "huggingface")
+
+# Used only when EMBEDDING_MODEL is left unset in .env.
+_DEFAULT_MODEL = {
+    "google": "gemini-embedding-001",
+    "huggingface": "sentence-transformers/all-MiniLM-L6-v2",
+}
+EMBEDDING_MODEL = (
+    os.getenv("EMBEDDING_MODEL", "").strip()
+    or _DEFAULT_MODEL.get(EMBEDDING_PROVIDER, _DEFAULT_MODEL["google"])
 )
+
+# Gemini embedding models the kit knows about (with or without the "models/"
+# prefix the API expects). Anything else is rejected early with a clear message.
+KNOWN_GOOGLE_EMBEDDING_MODELS = (
+    "gemini-embedding-001",
+    "text-embedding-004",
+    "embedding-001",
+)
+
 # None => detect the real dimension at runtime instead of hard-coding it.
 EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM") or 0) or None
 EMBED_BATCH_SIZE = int(os.getenv("EMBED_BATCH_SIZE", "90"))
@@ -69,3 +88,35 @@ def require_api_key() -> None:
             "GOOGLE_API_KEY is not set. Copy .env.example to .env and put your "
             "Gemini API key there (https://aistudio.google.com/app/apikey)."
         )
+
+
+def google_embedding_model_name() -> str:
+    """The model id the Google API expects, i.e. with a 'models/' prefix."""
+    name = EMBEDDING_MODEL
+    return name if name.startswith("models/") else f"models/{name}"
+
+
+def validate_embedding_config() -> None:
+    """Fail early, with a clear message, on a bad embedding setup in .env.
+
+    Called at the start of step 5 so a typo in EMBEDDING_PROVIDER / EMBEDDING_MODEL
+    surfaces here instead of as a deep library traceback later.
+    """
+    if EMBEDDING_PROVIDER not in KNOWN_PROVIDERS:
+        raise RuntimeError(
+            f"EMBEDDING_PROVIDER='{EMBEDDING_PROVIDER}' is not valid. "
+            f"Use one of: {', '.join(KNOWN_PROVIDERS)} (set it in .env)."
+        )
+
+    if EMBEDDING_PROVIDER == "google":
+        require_api_key()
+        bare = EMBEDDING_MODEL
+        if bare.startswith("models/"):
+            bare = bare[len("models/"):]
+        if bare not in KNOWN_GOOGLE_EMBEDDING_MODELS:
+            raise RuntimeError(
+                f"EMBEDDING_MODEL='{EMBEDDING_MODEL}' is not a known Gemini "
+                f"embedding model. Try one of: "
+                f"{', '.join(KNOWN_GOOGLE_EMBEDDING_MODELS)}. "
+                "Recommended: gemini-embedding-001."
+            )

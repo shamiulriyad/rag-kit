@@ -2,6 +2,7 @@
 __pycache__/
 *.pyc
 qdrant_data/
+.rag_index_meta.json
 data/*.pdf
 venv/
 .venv/

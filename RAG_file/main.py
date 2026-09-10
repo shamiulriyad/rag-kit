@@ -20,6 +20,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
 import config
+from rag import index_meta
 from rag.step05_embedding import get_embeddings
 from rag.step06_vector_store import get_vector_store
 from rag.step08_query_embedding import embed_question
@@ -35,6 +36,7 @@ def _ensure_ready() -> None:
     """Load models / open Qdrant on first use. Safe to call repeatedly."""
     if _state.get("ready"):
         return
+    index_meta.check_before_query()                     # model still matches the index?
     embeddings = get_embeddings()                       # step 5 (read side)
     _state["embeddings"] = embeddings
     _state["vector_store"] = get_vector_store(embeddings)  # step 6 (read side)
