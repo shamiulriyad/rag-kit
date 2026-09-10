@@ -1,2 +1,41 @@
+# --- Local planning notes (not part of the kit) ---
 promt.txt
 fix promt.txt
+
+# --- Secrets / config ---
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+
+# --- Python (rag/) ---
+venv/
+.venv/
+__pycache__/
+*.pyc
+rag/qdrant_data/
+rag/.rag_index_meta.json
+rag/data/*.pdf
+rag/data/*.PDF
+
+# --- .NET (backend/) ---
+bin/
+obj/
+*.user
+
+# --- Node / React (frontend/) ---
+node_modules/
+dist/
+dist-ssr/
+*.local
+*.log
+
+# --- Qdrant server volume (docker compose) ---
+qdrant_storage/
+
+# --- Editors / OS ---
+.vs/
+.idea/
+.DS_Store
+Thumbs.db
