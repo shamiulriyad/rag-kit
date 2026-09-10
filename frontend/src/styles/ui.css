@@ -1,0 +1,306 @@
+/* ============================================================================
+   Reusable UI primitives — Button, Badge, Card, Field, Pills, Spinner
+   ========================================================================= */
+
+.btn {
+  --btn-bg: var(--primary);
+  --btn-fg: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-2);
+  padding: 10px 18px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-weight: 600;
+  font-size: 0.92rem;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform var(--dur) var(--ease), background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease),
+    opacity var(--dur) var(--ease);
+}
+.btn:hover {
+  background: var(--primary-hover);
+  transform: translateY(-1px);
+}
+.btn:active {
+  transform: translateY(0);
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+.btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn--primary {
+  box-shadow: 0 10px 30px -12px var(--primary-ring);
+}
+.btn--secondary {
+  --btn-bg: transparent;
+  --btn-fg: var(--text);
+  border-color: var(--border-strong);
+}
+.btn--secondary:hover {
+  --btn-bg: var(--card-hover);
+  border-color: var(--border-strong);
+}
+.btn--ghost {
+  --btn-bg: transparent;
+  --btn-fg: var(--text-muted);
+}
+.btn--ghost:hover {
+  --btn-bg: var(--card);
+  --btn-fg: var(--text);
+}
+.btn--danger {
+  --btn-bg: transparent;
+  --btn-fg: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+.btn--danger:hover {
+  --btn-bg: var(--danger-soft);
+}
+.btn--sm {
+  padding: 7px 12px;
+  font-size: 0.82rem;
+}
+.btn--lg {
+  padding: 14px 24px;
+  font-size: 1rem;
+}
+.btn--block {
+  width: 100%;
+}
+
+/* Badge / chip */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+.badge--primary {
+  border-color: var(--primary-ring);
+  background: var(--primary-soft);
+  color: #c9b6f7;
+}
+.badge--accent {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--accent-soft);
+  color: #7fdfeb;
+}
+.badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* Status pill (Ready / Processing / Failed / health) */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  font-size: 0.76rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  background: var(--surface);
+}
+.pill__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 4px color-mix(in srgb, currentColor 22%, transparent);
+}
+.pill--ok {
+  color: var(--success);
+  border-color: var(--success-soft);
+  background: var(--success-soft);
+}
+.pill--busy {
+  color: var(--accent);
+  border-color: var(--accent-soft);
+  background: var(--accent-soft);
+}
+.pill--warn {
+  color: var(--warning);
+  border-color: var(--warning-soft);
+  background: var(--warning-soft);
+}
+.pill--bad {
+  color: var(--danger);
+  border-color: var(--danger-soft);
+  background: var(--danger-soft);
+}
+
+/* Card */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--sp-5);
+}
+.card--pad-lg {
+  padding: var(--sp-6);
+}
+.card--interactive {
+  transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+.card--interactive:hover {
+  border-color: var(--border-strong);
+  background: var(--card-hover);
+  transform: translateY(-3px);
+}
+
+/* Form fields */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.field__label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.field__hint {
+  font-size: 0.78rem;
+  color: var(--text-faint);
+}
+.field__error {
+  font-size: 0.78rem;
+  color: var(--danger);
+}
+.input,
+.select,
+.textarea {
+  width: 100%;
+  padding: 10px 13px;
+  background: var(--bg);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 0.9rem;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--text-faint);
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+.textarea {
+  resize: vertical;
+  min-height: 88px;
+  line-height: 1.5;
+}
+.select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 38px;
+}
+
+/* Spinner */
+.spinner {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--primary);
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Skeleton */
+.skeleton {
+  border-radius: var(--r-sm);
+  background: linear-gradient(
+    90deg,
+    var(--card) 0%,
+    var(--card-hover) 50%,
+    var(--card) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+@keyframes shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Section eyebrow + heading block used across marketing + docs */
+.section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  max-width: 640px;
+}
+.section-head--center {
+  align-items: center;
+  text-align: center;
+  margin-inline: auto;
+}
+.eyebrow {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* Logo */
+.logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-size: 1.02rem;
+}
+.logo__mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  color: #fff;
+  box-shadow: 0 8px 20px -8px var(--primary-ring);
+}
+.logo__mark svg {
+  width: 17px;
+  height: 17px;
+}

@@ -61,10 +61,21 @@ export function uploadPdf(file: File): Promise<UploadResponse> {
   return request<UploadResponse>('/api/documents/upload', { method: 'POST', body: form })
 }
 
-export function askQuestion(question: string, topK?: number): Promise<ChatResponse> {
+export interface AskOptions {
+  topK?: number
+  /** Optional document scope for the retrieval step; the backend may ignore it. */
+  documentId?: string
+}
+
+export function askQuestion(
+  question: string,
+  opts: AskOptions = {},
+): Promise<ChatResponse> {
   return request<ChatResponse>('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, topK }),
+    body: JSON.stringify({ question, topK: opts.topK, documentId: opts.documentId }),
   })
 }
+
+export { BASE_URL }

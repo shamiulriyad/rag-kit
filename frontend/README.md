@@ -1,32 +1,59 @@
-# React + TypeScript + Vite
+# RAG Starter — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Premium, dark-first React frontend for **RAG Starter**. Marketing landing page plus
+the authenticated app (dashboard, documents, knowledge chat, settings, docs).
 
-Currently, two official plugins are available:
+Stack: React 19 + TypeScript + Vite, `react-router-dom`, `lucide-react`. No CSS
+framework — the design system lives in `src/styles/` (tokens → base → ui →
+marketing → app).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Scripts
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```bash
+npm install
+npm run dev       # local dev server
+npm run build     # tsc -b && vite build
+npm run lint      # oxlint
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## Structure
+
+```
+src/
+  styles/          design tokens + all CSS layers (imported by index.css)
+  lib/             auth (mock/localStorage), markdown renderer, formatters, mock + docs data
+  services/api.ts  the ONLY place that calls the backend (React → .NET API only)
+  components/
+    ui/            Button, Badge, Field, StatCard, StatusPill, Toast, Logo, icons
+    marketing/     MarketingNav, MarketingFooter, PipelineFlow
+    app/           AppLayout, Sidebar, ProtectedRoute, AuthScaffold
+  pages/           Landing, Login, Signup, Dashboard, Documents, Chat, Settings, Docs
+```
+
+## Routes
+
+| Path | Access | Notes |
+| --- | --- | --- |
+| `/` | public | Landing page |
+| `/docs` | public | Documentation, wrapped in marketing chrome |
+| `/login`, `/signup` | guest only | **Mock auth** — no JWT/Identity/DB, localStorage only |
+| `/dashboard`, `/documents`, `/chat`, `/settings` | protected | Redirect to `/login` when signed out |
+
+## Backend connection
+
+Configured at build time via `.env` (see `.env.example`):
+
+```
+VITE_API_URL=http://localhost:5038      # URL the browser uses to reach the .NET API
+VITE_MAX_UPLOAD_MB=200
+```
+
+`src/services/api.ts` wraps `/api/health`, `/api/documents/upload` and `/api/chat`.
+When the API is unreachable, Documents and Chat fall back to local demo data so the
+UI stays explorable, and say so in-line.
+
+## Auth honesty
+
+Authentication is deliberately frontend-only for now. `src/lib/auth.tsx` validates
+input shape and stores a mock user in `localStorage`. The UI presents a real SaaS
+sign-in experience but no credentials leave the browser.
