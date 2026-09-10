@@ -8,10 +8,10 @@
 #   frontend  http://localhost:5173   nginx serving the React build
 #   backend   http://localhost:5038   ASP.NET Core API (React talks to this)
 #   rag       http://localhost:8000   Python FastAPI RAG service
-#   qdrant    http://localhost:6333   vector database (server mode, so uploads index directly)
+#   qdrant    http://localhost:6333   vector database (SERVER mode)
 #
-# In compose, Qdrant runs as a SERVER (not embedded on disk), so uploading a PDF
-# in the UI indexes it straight away - no separate `python ingest.py` step.
+# Qdrant runs as a real server here, so uploading a PDF in the UI indexes it
+# straight away - no separate `python ingest.py` step.
 
 services:
   qdrant:
@@ -20,6 +20,12 @@ services:
       - "6333:6333"
     volumes:
       - qdrant_storage:/qdrant/storage
+    healthcheck:
+      # the image has no curl/wget; a bash TCP probe is enough
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/6333 && echo ok >&3"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   rag:
     build: ./rag
@@ -31,12 +37,15 @@ services:
       # Compose wiring - overrides whatever is in .env for the containerised run.
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-google}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-gemini-embedding-001}
-      QDRANT_URL: http://qdrant:6333
-      QDRANT_PATH: ""            # empty => server mode (use QDRANT_URL above)
+      QDRANT_URL: http://qdrant:6333     # the compose service name
+      QDRANT_PATH: ""                    # empty => server mode (required for UI upload)
       COLLECTION_NAME: ${COLLECTION_NAME:-pdf_rag}
       LLM_MODEL: ${LLM_MODEL:-gemini-2.5-flash}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
+      MIN_TEXT_CHARS: ${MIN_TEXT_CHARS:-200}
     depends_on:
-      - qdrant
+      qdrant:
+        condition: service_healthy
 
   backend:
     build: ./backend
@@ -45,6 +54,7 @@ services:
     environment:
       Rag__BaseUrl: http://rag:8000
       Rag__TimeoutSeconds: "600"
+      Upload__MaxBytes: ${UPLOAD_MAX_BYTES:-209715200}   # ~200 MB, matches MAX_UPLOAD_MB
       Cors__Origins__0: http://localhost:5173
     depends_on:
       - rag
@@ -55,6 +65,7 @@ services:
       args:
         # The URL the browser uses to reach the backend (host-published port).
         VITE_API_URL: http://localhost:5038
+        VITE_MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
     ports:
       - "5173:80"
     depends_on:

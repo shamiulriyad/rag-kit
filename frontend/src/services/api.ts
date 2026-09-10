@@ -29,36 +29,42 @@ export interface Health {
 async function readError(res: Response): Promise<string> {
   try {
     const body = await res.json()
-    return body.error ?? body.detail ?? res.statusText
+    // Backend sends { message }; FastAPI sends { detail }; older code used { error }.
+    return body.message ?? body.detail ?? body.error ?? res.statusText
   } catch {
     return res.statusText || `HTTP ${res.status}`
   }
 }
 
-export async function checkHealth(): Promise<Health> {
-  const res = await fetch(`${BASE_URL}/api/health`)
+// One place to turn a fetch into JSON, so a dead backend reads as a real
+// sentence instead of the browser's bare "Failed to fetch".
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${BASE_URL}${path}`, init)
+  } catch {
+    throw new Error(
+      `Could not reach the backend at ${BASE_URL}. Is it running? (cd backend && dotnet run)`,
+    )
+  }
   if (!res.ok) throw new Error(await readError(res))
-  return res.json()
+  return res.json() as Promise<T>
 }
 
-export async function uploadPdf(file: File): Promise<UploadResponse> {
+export function checkHealth(): Promise<Health> {
+  return request<Health>('/api/health')
+}
+
+export function uploadPdf(file: File): Promise<UploadResponse> {
   const form = new FormData()
   form.append('file', file)
-
-  const res = await fetch(`${BASE_URL}/api/documents/upload`, {
-    method: 'POST',
-    body: form,
-  })
-  if (!res.ok) throw new Error(await readError(res))
-  return res.json()
+  return request<UploadResponse>('/api/documents/upload', { method: 'POST', body: form })
 }
 
-export async function askQuestion(question: string, topK?: number): Promise<ChatResponse> {
-  const res = await fetch(`${BASE_URL}/api/chat`, {
+export function askQuestion(question: string, topK?: number): Promise<ChatResponse> {
+  return request<ChatResponse>('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question, topK }),
   })
-  if (!res.ok) throw new Error(await readError(res))
-  return res.json()
 }

@@ -78,12 +78,13 @@ public class RagService : IRagService
 
     public async Task<DocumentResponse> IngestAsync(Stream pdf, string fileName, CancellationToken ct = default)
     {
-        using var form = new MultipartFormDataContent();
-        using var file = new StreamContent(pdf);
-        file.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
-        form.Add(file, "file", fileName);
+        // Raw streamed body (not multipart): nothing buffers the whole PDF, and
+        // no multipart part-size limit applies on the Python side.
+        using var body = new StreamContent(pdf);
+        body.Headers.ContentType = new MediaTypeHeaderValue("application/pdf");
 
-        using var res = await SendAsync(() => _http.PostAsync("/ingest", form, ct), "ingest");
+        var url = $"/ingest?filename={Uri.EscapeDataString(fileName)}&recreate=true";
+        using var res = await SendAsync(() => _http.PostAsync(url, body, ct), "ingest");
         await EnsureOkAsync(res, "ingest", ct);
 
         return await res.Content.ReadFromJsonAsync<DocumentResponse>(Json, ct)
@@ -117,20 +118,26 @@ public class RagService : IRagService
         if (res.IsSuccessStatusCode) return;
 
         var raw = await res.Content.ReadAsStringAsync(ct);
-        var detail = TryExtractDetail(raw) ?? raw;
-        _log.LogError("RAG {Op} failed ({Status}): {Detail}", op, (int)res.StatusCode, detail);
+        var detail = TryExtractMessage(raw);
+        _log.LogError("RAG {Op} failed ({Status}): {Detail}", op, (int)res.StatusCode, detail ?? raw);
+
+        // Pass the Python status code and its own message straight through, so
+        // React shows "This PDF appears to be scanned..." rather than a wrapper.
         throw new RagException(
-            $"RAG service '{op}' failed ({(int)res.StatusCode}): {detail}",
+            detail ?? $"The RAG service failed during '{op}' (HTTP {(int)res.StatusCode}).",
             (int)res.StatusCode);
     }
 
-    /// <summary>FastAPI puts errors in {"detail": ...}; surface just that when present.</summary>
-    private static string? TryExtractDetail(string body)
+    /// <summary>FastAPI errors are {"detail": ...}; ours are {"message": ...}. Surface either.</summary>
+    private static string? TryExtractMessage(string body)
     {
         try
         {
             using var doc = JsonDocument.Parse(body);
-            return doc.RootElement.TryGetProperty("detail", out var d) ? d.ToString() : null;
+            var root = doc.RootElement;
+            if (root.TryGetProperty("detail", out var d)) return d.ToString();
+            if (root.TryGetProperty("message", out var m)) return m.ToString();
+            return null;
         }
         catch
         {

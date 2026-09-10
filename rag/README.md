@@ -49,13 +49,16 @@ pip install -r requirements.txt
 cp .env.example .env                                 # then paste your Gemini API key
 ```
 
-Qdrant runs **embedded on disk by default** (`QDRANT_PATH=qdrant_data` in
-`.env.example`) - no server, no Docker. To use a Qdrant server instead, clear
-`QDRANT_PATH` and run:
+**Qdrant runs as a server** in normal mode (`QDRANT_URL` in `.env.example`,
+`QDRANT_PATH` empty) - this is what lets the UI upload index a PDF. Start one:
 
 ```bash
 docker run -p 6333:6333 -v qdrant_storage:/qdrant/storage qdrant/qdrant
 ```
+
+No Docker? Set `QDRANT_PATH=qdrant_data` for an **embedded on-disk** store - no
+server, but only `python ingest.py` can write to it (a running service can't), so
+the UI upload returns a clear 501. See [`../docs/qdrant.md`](../docs/qdrant.md).
 
 ## Run
 
@@ -65,10 +68,10 @@ python ask.py "what does chapter 3 say about X?"
 python ask.py                                        # interactive
 ```
 
-Or serve the same query pipeline over HTTP (what the .NET backend calls):
+Or serve the same pipeline over HTTP (what the .NET backend calls):
 
 ```bash
-uvicorn main:app --port 8000        # GET /health, POST /query {question, top_k?}
+uvicorn main:app --port 8000        # GET /health, POST /query, POST /ingest?filename=x.pdf
 ```
 
 ## Embeddings

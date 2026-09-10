@@ -43,12 +43,15 @@ python3.11 -m venv venv                               # use 3.11/3.12; 3.13+ has
 venv\Scripts\activate                                 # Linux/macOS: source venv/bin/activate
 pip install -r requirements.txt                       # local embeddings: also -r requirements-local.txt
 copy .env.example .env                                # then paste your Gemini API key
-python ingest.py --pdf data/your.pdf --recreate       # build the index
+docker run -p 6333:6333 -v qdrant_storage:/qdrant/storage qdrant/qdrant   # Qdrant server (normal mode)
+python ingest.py --pdf data/your.pdf --recreate       # optional seed (UI upload also works)
 uvicorn main:app --port 8000                          # serve GET /health, POST /query, POST /ingest
 ```
 
+No Docker? Set `QDRANT_PATH=qdrant_data` in `rag/.env` for the embedded on-disk
+fallback — then add PDFs with `python ingest.py` (UI upload needs the server).
 See [`rag/README.md`](rag/README.md) and [`docs/embeddings.md`](docs/embeddings.md)
-for embedding options (Gemini vs local), Qdrant modes, and the per-step breakdown.
+for embedding options and [`docs/qdrant.md`](docs/qdrant.md) for the two modes.
 
 ### 2. .NET backend
 
@@ -66,11 +69,12 @@ Endpoints:
 |---------------|---------|-------|
 | `GET /api/health` | Is the backend up? Is the RAG service reachable? | Python `GET /health` |
 | `POST /api/chat` | `{ "question": "...", "topK": 4 }` → `{ answer, sources[] }` | Python `POST /query` |
-| `POST /api/documents/upload` | multipart `file=<pdf>` → `{ document, pages, chunks }` | Python `POST /ingest` |
+| `POST /api/documents/upload` | multipart `file=<pdf>` → `{ document, pages, chunks }` | Python `POST /ingest` (raw stream) |
 
-> `POST /api/documents/upload` needs Qdrant in **server mode** (the Python
-> service can't write to embedded on-disk Qdrant while it's running). With the
-> default embedded setup, index PDFs with `python ingest.py` instead.
+> `POST /api/documents/upload` needs Qdrant in **server mode** (normal mode; the
+> Python service can't write to embedded on-disk Qdrant while it's running).
+> Max size is `Upload:MaxBytes` (200 MB default); scanned PDFs are rejected with
+> a clear message. Falling back to embedded Qdrant? Index with `python ingest.py`.
 
 ### 3. React frontend
 
@@ -87,9 +91,9 @@ Nothing is hard-coded; every service reads its own config file:
 
 | Service | File | Key settings |
 |---------|------|--------------|
-| Python | `rag/.env` | `GOOGLE_API_KEY`, `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`, `QDRANT_URL`/`QDRANT_PATH`, `CHUNK_SIZE`, `TOP_K`, `LLM_MODEL` |
-| .NET | `backend/appsettings.json` | `Rag:BaseUrl`, `Rag:TimeoutSeconds`, `Cors:Origins` |
-| React | `frontend/.env` | `VITE_API_URL` |
+| Python | `rag/.env` | `GOOGLE_API_KEY`, `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`, `QDRANT_URL` (+ `QDRANT_PATH` for the fallback), `CHUNK_SIZE`, `TOP_K`, `LLM_MODEL`, `MAX_UPLOAD_MB` |
+| .NET | `backend/appsettings.json` | `Rag:BaseUrl`, `Rag:TimeoutSeconds`, `Upload:MaxBytes`, `Cors:Origins` |
+| React | `frontend/.env` | `VITE_API_URL`, `VITE_MAX_UPLOAD_MB` |
 
 Never commit `.env`, API keys, `venv/`, `node_modules/`, `bin/`, `obj/`, or
 private PDFs. Each folder has a `.env.example` to copy from.

@@ -67,12 +67,24 @@ EMBED_BATCH_SIZE = int(os.getenv("EMBED_BATCH_SIZE", "90"))
 EMBED_SLEEP = float(os.getenv("EMBED_SLEEP", "60" if EMBEDDING_PROVIDER == "google" else "0"))
 
 # --- Step 6: Qdrant ------------------------------------------------------
+# Normal mode: connect to a Qdrant SERVER over HTTP. `docker compose up` starts
+# one; for local dev without Docker run `docker run -p 6333:6333 qdrant/qdrant`.
 QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
 QDRANT_API_KEY = os.getenv("QDRANT_API_KEY") or None
 _qdrant_path = os.getenv("QDRANT_PATH")
-# local on-disk mode, no server; anchored to the project folder like PDF_PATH
+# Optional fallback: embedded on-disk store (no server). Only the `python
+# ingest.py` CLI can write to it - a running service, and therefore the UI
+# upload, need server mode. Leave QDRANT_PATH empty for normal mode.
 QDRANT_PATH = str(_resolve(_qdrant_path, BASE_DIR / "qdrant_data")) if _qdrant_path else None
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "pdf_rag")
+
+# --- Upload (POST /ingest via the UI) ----------------------------------
+# Sensible configurable ceiling - not unlimited. The .NET layer enforces the
+# same number for the browser -> backend hop (Upload__MaxBytes).
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "200"))
+# A PDF whose pages yield less text than this (after cleaning) is treated as
+# scanned/image-based and rejected with a clear message instead of being indexed.
+MIN_TEXT_CHARS = int(os.getenv("MIN_TEXT_CHARS", "200"))
 
 # --- Step 9: Retrieval ---------------------------------------------------
 TOP_K = int(os.getenv("TOP_K", "4"))

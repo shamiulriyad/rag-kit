@@ -5,6 +5,9 @@ interface Props {
   onIngested: (result: UploadResponse) => void
 }
 
+// Keep in step with MAX_UPLOAD_MB / Upload__MaxBytes on the servers.
+const MAX_UPLOAD_MB = Number(import.meta.env.VITE_MAX_UPLOAD_MB ?? 200)
+
 export default function FileUpload({ onIngested }: Props) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [file, setFile] = useState<File | null>(null)
@@ -13,6 +16,15 @@ export default function FileUpload({ onIngested }: Props) {
 
   async function handleUpload() {
     if (!file) return
+
+    if (file.size > MAX_UPLOAD_MB * 1024 * 1024) {
+      setError(
+        `That PDF is ${(file.size / 1024 / 1024).toFixed(0)} MB. The limit is ${MAX_UPLOAD_MB} MB — ` +
+          `raise MAX_UPLOAD_MB / Upload__MaxBytes, or split the file.`,
+      )
+      return
+    }
+
     setBusy(true)
     setError(null)
     try {
@@ -42,6 +54,9 @@ export default function FileUpload({ onIngested }: Props) {
           {busy ? 'Indexing…' : 'Upload'}
         </button>
       </div>
+      <p className="hint">
+        Text-based PDF, up to {MAX_UPLOAD_MB} MB. Scanned/image PDFs need OCR first.
+      </p>
       {busy && (
         <p className="hint">
           Extracting, chunking and embedding — a large PDF can take a few minutes.

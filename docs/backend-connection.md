@@ -31,7 +31,7 @@ React app talks to.
 |---------------|------|--------------|---------|
 | `GET /api/health` | – | `GET /health` | `{ status: "ok", rag: "ok" \| "unreachable" }` |
 | `POST /api/chat` | `{ question, topK? }` | `POST /query` `{ question, top_k? }` | `{ answer, sources: [{ page, document, score }] }` |
-| `POST /api/documents/upload` | multipart `file=<pdf>` | `POST /ingest` multipart `file` | `{ document, pages, chunks, recreated }` |
+| `POST /api/documents/upload` | multipart `file=<pdf>` | `POST /ingest?filename=…` (raw PDF body, streamed) | `{ document, pages, chunks, recreated }` |
 
 ## How the translation works
 
@@ -42,28 +42,47 @@ React app talks to.
 | `sources[].source` | `Sources[].Document` |
 | `sources[].page` | `Sources[].Page` |
 | `top_k` | `TopK` |
-| FastAPI `{ "detail": "..." }` on error | unwrapped into `RagException.Message` → `{ "error": "..." }` |
+| FastAPI `{ "detail": "..." }` on error | its status + text passed straight through → `{ "success": false, "message": "..." }` |
+
+The browser → .NET hop is multipart (`IFormFile`, buffered to disk above ~64 KB).
+The .NET → Python hop is a **raw `application/pdf` body**, streamed — so no
+multipart part-size limit applies on the Python side and nothing holds the whole
+PDF in memory.
 
 ## Error handling
 
-`RagService` turns failures into a `RagException` with a real HTTP status, and
-the middleware in `Program.cs` renders it as `{ "error": "..." }`:
+Every failure leaves the API as JSON `{ "success": false, "message": "..." }`
+with a real status — never a dropped connection (which the browser can only show
+as "Failed to fetch"). The middleware in `Program.cs` handles `RagException`,
+`BadHttpRequestException` (body over the limit), and any unhandled exception.
 
 | Situation | Status React gets | Message |
 |-----------|-------------------|---------|
+| Upload over the size limit | `413` | "PDF exceeds the configured upload limit of 200 MB." |
+| Scanned / image-only PDF | `422` | "This PDF appears to be scanned/image-based. OCR is required before indexing." |
+| Qdrant in embedded mode | `501` | "Upload needs Qdrant in server mode. …" |
 | Python unreachable | `502` | "Cannot reach the Python RAG service. Is it running?" |
 | Python slow (big PDF) | `504` | "The RAG service timed out during 'ingest'…" |
-| Python returned 4xx/5xx | that status | the FastAPI `detail` string |
-| Empty body from Python | `502` | "Empty response from the RAG service." |
+| Other Python 4xx/5xx | that status | the FastAPI `detail` string, passed through |
+| Backend bug | `500` | "Unexpected error in the backend. Check its logs." |
 
 `Rag:TimeoutSeconds` defaults to **600** because embedding a large PDF on the
 free Gemini tier is genuinely slow.
 
-## Upload caveat
+## Upload size limit
 
-`POST /api/documents/upload` only works when the Python service has Qdrant in
-**server mode** (Docker does this). With embedded on-disk Qdrant, Python returns
-`501` and you index with `python ingest.py`. See [qdrant.md](qdrant.md).
+Configurable, not unlimited: `Upload:MaxBytes` in `appsettings.json` (or
+`Upload__MaxBytes`), default **200 MB**. It is applied to Kestrel's
+`MaxRequestBodySize` and `FormOptions.MultipartBodyLengthLimit` in `Program.cs`,
+and mirrored on the Python side by `MAX_UPLOAD_MB` and in the browser by
+`VITE_MAX_UPLOAD_MB`. Raise all three together for very large PDFs.
+
+## Upload needs Qdrant in server mode
+
+`POST /api/documents/upload` works when the Python service runs Qdrant as a
+**server** (the normal mode; `docker compose up` sets it up). With the embedded
+on-disk fallback, Python returns `501` and you index with `python ingest.py`.
+See [qdrant.md](qdrant.md).
 
 ## How to change it
 

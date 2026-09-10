@@ -27,10 +27,12 @@ Every value below has a default in `config.py`; you only set what you want to ch
 | `EMBEDDING_DIM` | *(auto)* | Force a vector size. Leave empty to detect it. | 5 |
 | `EMBED_BATCH_SIZE` | `90` | Texts per embed call (Gemini caps at 100) | 6 |
 | `EMBED_SLEEP` | `60` (google) / `0` | Seconds to pause between batches, to dodge the free-tier rate limit | 6 |
-| `QDRANT_PATH` | `qdrant_data` | Embedded on-disk store. **Set = embedded mode.** | 6 |
-| `QDRANT_URL` | `http://localhost:6333` | Qdrant server URL. Used only when `QDRANT_PATH` is empty. | 6 |
+| `QDRANT_URL` | `http://localhost:6333` | Qdrant **server** URL — the normal mode, required for UI upload. In Compose: `http://qdrant:6333`. | 6 |
+| `QDRANT_PATH` | *(empty)* | Set it to fall back to an embedded on-disk store (no server). Then `QDRANT_URL` is ignored and UI upload returns 501. | 6 |
 | `QDRANT_API_KEY` | *(none)* | For a secured Qdrant server / Qdrant Cloud | 6 |
 | `COLLECTION_NAME` | `pdf_rag` | Qdrant collection name | 6 |
+| `MAX_UPLOAD_MB` | `200` | Reject PDFs larger than this on `POST /ingest`. Not unlimited. | upload |
+| `MIN_TEXT_CHARS` | `200` | Below this much extractable text, the PDF is rejected as scanned/image-based. | upload |
 | `TOP_K` | `4` | How many chunks to retrieve per question | 9 |
 | `LLM_MODEL` | `gemini-2.5-flash` | Gemini chat model | 10 |
 | `TEMPERATURE` | `0.2` | LLM sampling temperature (lower = more literal) | 10 |
@@ -49,6 +51,7 @@ no longer matches. See [embeddings.md](embeddings.md).
 |---------|------------------|---------|--------------|
 | `Rag:BaseUrl` | `Rag__BaseUrl` | `http://localhost:8000` | Where the Python RAG service is |
 | `Rag:TimeoutSeconds` | `Rag__TimeoutSeconds` | `600` | How long to wait on Python (embedding a big PDF is slow) |
+| `Upload:MaxBytes` | `Upload__MaxBytes` | `209715200` (200 MB) | Max upload size. Enforced by Kestrel + `FormOptions`. Keep in step with `MAX_UPLOAD_MB`. |
 | `Cors:Origins:0` | `Cors__Origins__0` | `http://localhost:5173` | Allowed browser origin for the API |
 
 The separator for nested keys in an env var is `__` (double underscore). There is
@@ -61,6 +64,7 @@ no `.env` loader — `backend/.env.example` just documents the variable names.
 | Variable | Default | What it does |
 |----------|---------|--------------|
 | `VITE_API_URL` | `http://localhost:5038` | Base URL of the **.NET backend**. The frontend never calls Python directly. |
+| `VITE_MAX_UPLOAD_MB` | `200` | Client-side size hint + pre-check before uploading. Keep in step with the server limits. |
 
 Vite inlines this at **build** time, not run time. In Docker it is a build arg in
 `docker-compose.yml`, and it must be the URL the *browser* uses (the host-published
@@ -71,10 +75,13 @@ backend port), not a compose service name.
 ## Docker — root `.env`
 
 Only `GOOGLE_API_KEY` is required. `EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`,
-`COLLECTION_NAME`, `LLM_MODEL`, `CHUNK_SIZE`, `CHUNK_OVERLAP`, `TOP_K` are optional
-overrides passed through to the `rag` container. `docker-compose.yml` additionally
-forces `QDRANT_URL=http://qdrant:6333` and clears `QDRANT_PATH`, so Qdrant runs in
-server mode inside compose.
+`COLLECTION_NAME`, `LLM_MODEL`, `CHUNK_SIZE`, `CHUNK_OVERLAP`, `TOP_K`,
+`MAX_UPLOAD_MB`, `MIN_TEXT_CHARS` are optional overrides passed through to the
+`rag` container; `MAX_UPLOAD_MB` also feeds the frontend's `VITE_MAX_UPLOAD_MB`
+build arg and (as `UPLOAD_MAX_BYTES`) the backend's `Upload__MaxBytes`.
+`docker-compose.yml` additionally forces `QDRANT_URL=http://qdrant:6333` and
+clears `QDRANT_PATH`, so Qdrant runs in server mode inside compose and the UI
+upload works.
 
 ---
 

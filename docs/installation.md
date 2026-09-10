@@ -32,10 +32,10 @@ Open <http://localhost:5173>, upload a PDF, ask a question.
 | rag      | <http://localhost:8000> | FastAPI; `/docs` for the OpenAPI UI |
 | qdrant   | <http://localhost:6333> | vector DB (server mode) |
 
-**Why Docker "just works" for uploads:** in compose, Qdrant runs as a *server*,
-so uploading a PDF in the UI indexes it immediately. (By hand, the default is
-embedded on-disk Qdrant, which one process at a time can open — see
-[qdrant.md](qdrant.md).)
+**Why Docker "just works" for uploads:** compose runs Qdrant as a *server*, so
+uploading a PDF in the UI indexes it immediately. Running by hand, you get the
+same by pointing `QDRANT_URL` at a Qdrant server (see below); the embedded
+on-disk fallback can't accept UI uploads — see [qdrant.md](qdrant.md).
 
 **How to change it:** ports, the embedding model and the API key all come from
 `.env` and `docker-compose.yml`. See [configuration.md](configuration.md).
@@ -64,9 +64,17 @@ pip install -r requirements.txt
 # optional, only for local embeddings:
 # pip install -r requirements-local.txt
 cp .env.example .env                  # paste your Gemini key
-python ingest.py --pdf data/your.pdf --recreate
+
+# Qdrant server (normal mode - lets the UI upload work). Leave this running:
+docker run -p 6333:6333 -v qdrant_storage:/qdrant/storage qdrant/qdrant
+
+python ingest.py --pdf data/your.pdf --recreate    # optional seed; UI upload also works
 uvicorn main:app --port 8000
 ```
+
+No Docker at all? Set `QDRANT_PATH=qdrant_data` in `rag/.env` for the embedded
+on-disk fallback. Then add PDFs with `python ingest.py` — the UI upload button
+will return a clear "needs server mode" message.
 
 ### 2. .NET backend — [`backend/`](../backend/)
 

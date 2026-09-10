@@ -55,7 +55,9 @@ the last number you saw tells you which section to read.
 |---------|-------|-----|
 | `Qdrant dimension mismatch: collection stores X-dim … model produces Y-dim` | changed the embedding model without rebuilding | `python ingest.py --recreate` |
 | `Embedding model changed - the 'pdf_rag' collection was built with A, but .env now says B` | `.rag_index_meta.json` guard | `python ingest.py --recreate` |
-| `POST /ingest` returns `501` | Qdrant is embedded on-disk; a running service can't also write to it | run `python ingest.py`, or use server mode (`docker compose up`) |
+| `POST /ingest` returns `501` ("Upload needs Qdrant in server mode") | `QDRANT_PATH` is set → embedded mode; a running service can't also write to it | clear `QDRANT_PATH`, set `QDRANT_URL` to a running server (`docker compose up`, or `docker run -p 6333:6333 qdrant/qdrant`); or add PDFs with `python ingest.py` |
+| Upload returns `413` "PDF exceeds the configured upload limit" | file bigger than `MAX_UPLOAD_MB` / `Upload__MaxBytes` (default 200 MB) | raise `MAX_UPLOAD_MB`, `Upload__MaxBytes` and `VITE_MAX_UPLOAD_MB` together, or split the PDF |
+| Upload returns `422` "This PDF appears to be scanned/image-based" | pages have < `MIN_TEXT_CHARS` extractable text | OCR the PDF first (`ocrmypdf`), then upload the OCR'd copy |
 | `[Errno 11] Resource temporarily unavailable` opening Qdrant | another process holds the embedded store (another `uvicorn`, `ask.py`, a stale lock) | stop the other process; delete `qdrant_data/.lock` if stale |
 | Re-ingest keeps *adding* vectors (count grows each run) | embedded `delete_collection()` leaves `storage.sqlite` behind | use `--recreate` — `_reset_local_storage()` removes the folder first |
 
@@ -87,10 +89,12 @@ the last number you saw tells you which section to read.
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Page says "backend unreachable" | .NET not running, or wrong `VITE_API_URL` | `cd backend && dotnet run`; check `frontend/.env` |
+| Page says "backend unreachable" / "Could not reach the backend" | .NET not running, or wrong `VITE_API_URL` | `cd backend && dotnet run`; check `frontend/.env` |
 | CORS error in the browser console | frontend origin not in `Cors:Origins` | add it (`Cors__Origins__1=...`) and restart the backend |
 | Changed `VITE_API_URL` but nothing happened | Vite inlines env at build time | restart `npm run dev`; for Docker, rebuild the `frontend` image |
-| Upload button errors with `501` | embedded Qdrant (see step 6) | index with `python ingest.py`, or run `docker compose up` |
+| "That PDF is N MB. The limit is 200 MB" before upload starts | client-side pre-check against `VITE_MAX_UPLOAD_MB` | raise the three upload limits together, or split the PDF |
+| Upload errors with `501` | Qdrant in embedded mode (see step 6) | switch to server mode, or index with `python ingest.py` |
+| Still see a bare "Failed to fetch" | the backend process died mid-request | check the backend terminal/logs; every handled error now returns JSON |
 
 ---
 

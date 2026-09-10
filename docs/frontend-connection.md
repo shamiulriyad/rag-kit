@@ -36,8 +36,12 @@ const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:5038'
 | `uploadPdf(file)` | `POST` multipart `file` | `/api/documents/upload` |
 | `askQuestion(q, topK?)` | `POST` JSON `{ question, topK }` | `/api/chat` |
 
-Errors: `readError()` unwraps `{ error }` (or FastAPI's `{ detail }`) into a
-thrown `Error`, which each component catches and shows inline.
+Errors: every call goes through one `request()` helper. A dead backend is caught
+and rethrown as *"Could not reach the backend at … Is it running?"* instead of
+the browser's bare "Failed to fetch"; a non-2xx response is unwrapped by
+`readError()` (`{ message }` → `{ detail }` → `{ error }`) and thrown, and each
+component shows it inline. `FileUpload` also pre-checks the file against
+`VITE_MAX_UPLOAD_MB` so an oversized PDF is rejected instantly, before upload.
 
 `VITE_API_URL` is inlined at **build** time. In Docker it is a build arg in
 `docker-compose.yml` and must be the URL the **browser** uses (the host-published
@@ -66,6 +70,7 @@ the user can check any claim against the cited page.
 3. The assistant bubble shows the answer; `SourceList` shows
    `handbook.pdf — page 12 (score 0.842)`.
 
-> With the by-hand default (embedded Qdrant), step 1 returns an error from the
-> backend — index with `python ingest.py` instead, or run the Docker stack where
-> uploads work. See [qdrant.md](qdrant.md).
+> Upload works when Qdrant runs as a server (the normal mode — `docker compose
+> up` sets it up). If you fell back to embedded on-disk Qdrant, step 1 shows
+> *"Upload needs Qdrant in server mode…"* — index with `python ingest.py`
+> instead. See [qdrant.md](qdrant.md).

@@ -18,7 +18,7 @@ you indexing, persistence, filtering by metadata, and it scales past memory.
 
 | Function | Job |
 |----------|-----|
-| `get_client()` | open Qdrant — embedded (path) or server (url) |
+| `get_client()` | open Qdrant — server (url) or embedded (path) |
 | `detect_or_config_dim()` | vector size from step 5 (detected, not hard-coded) |
 | `ensure_collection()` | create the collection at the right size, or detect a dimension mismatch |
 | `_reset_local_storage()` | on `--recreate` in embedded mode, delete the on-disk folder first |
@@ -27,24 +27,31 @@ you indexing, persistence, filtering by metadata, and it scales past memory.
 
 ## Two ways to run Qdrant
 
-| Mode | Set in `.env` | Concurrency | Upload-to-index (`POST /ingest`) |
-|------|---------------|-------------|-----------------------------------|
-| **Embedded on-disk** (default by hand) | `QDRANT_PATH=qdrant_data` | one process at a time | ✗ — use `python ingest.py` |
-| **Server** (default in Docker) | `QDRANT_URL=...`, `QDRANT_PATH` empty | many clients | ✓ |
+| Mode | Set in `.env` | UI upload (`POST /ingest`) | When |
+|------|---------------|-----------------------------|------|
+| **Server** *(normal mode)* | `QDRANT_URL=...`, `QDRANT_PATH` empty | ✅ works | the app — Docker, or a local `docker run` |
+| Embedded on-disk *(fallback)* | `QDRANT_PATH=qdrant_data` | ✗ 501 — use `python ingest.py` | quick CLI-only experiments, no server to run |
 
 `QDRANT_PATH` wins: if it is set, `QDRANT_URL` is ignored.
 
-**Why the long-running service can't ingest in embedded mode:** embedded Qdrant
-allows only one open handle to the on-disk store. While `uvicorn main:app` holds
-it for `/query`, it cannot also open it for writing, so `POST /ingest` returns
-`501` and points you at the CLI. `docker compose up` runs a real server, so
-uploads work there.
+**Why server mode is the normal mode:** embedded Qdrant allows only one open
+handle to the on-disk store. While `uvicorn main:app` holds it to answer
+`/query`, it cannot also open it for writing — so an upload can never be indexed.
+A standalone server accepts many clients at once, so the running service reads
+*and* writes, and the UI upload works end to end.
 
-Run a server by hand:
+### Get a server
 
 ```bash
+# Docker Compose (recommended) - starts Qdrant + all services
+docker compose up --build
+
+# or just Qdrant, for local by-hand dev
 docker run -p 6333:6333 -v qdrant_storage:/qdrant/storage qdrant/qdrant
 ```
+
+Then in `rag/.env`: `QDRANT_URL=http://localhost:6333` (or `http://qdrant:6333`
+inside Compose) and leave `QDRANT_PATH` empty.
 
 ## How the vector size is handled
 
@@ -59,21 +66,22 @@ Rebuild it with the new model:
     python ingest.py --recreate
 ```
 
-## The `--recreate` gotcha in embedded mode
+## The `--recreate` gotcha (embedded mode only)
 
 In embedded mode, `delete_collection()` clears the registry entry but **leaves
 `qdrant_data/collection/<name>/storage.sqlite` on disk**, and the next
 `create_collection()` re-attaches to that stale file — so a re-ingest *appends*
 (1306 → 2612 → 3918 chunks) and a dimension change breaks inserts. So
 `store_chunks()` calls `_reset_local_storage()` **before opening any client** on
-`--recreate`, physically removing the folder. Server mode doesn't have this
-problem. Always pass `--recreate` when you change the model or the PDF.
+`--recreate`, physically removing the folder. Server mode does not have this
+problem — there `delete_collection()` is enough. Always pass `--recreate` when
+you change the model or the PDF.
 
 ## How to change it
 
 | Want to… | Do |
 |----------|-----|
-| Use Qdrant Cloud | set `QDRANT_URL` to the cluster URL + `QDRANT_API_KEY`, clear `QDRANT_PATH` |
+| Use Qdrant Cloud | set `QDRANT_URL` to the cluster URL + `QDRANT_API_KEY`, leave `QDRANT_PATH` empty |
 | Rename the collection | `COLLECTION_NAME` in `.env` (then re-ingest) |
 | Use a different distance metric | `Distance.COSINE` in `ensure_collection()` |
 | Swap Qdrant for another vector DB | replace this file and `step09_retrieve.py`; keep the `get_vector_store` / `retrieve` signatures |
@@ -81,14 +89,14 @@ problem. Always pass `--recreate` when you change the model or the PDF.
 ## Example
 
 ```
-[6] Qdrant     : collection 'pdf_rag' now holds 168 vectors
+[6] Qdrant     : collection 'pdf_rag' now holds 1306 vectors
 ```
 
-On `python ingest.py --recreate`:
+On `python ingest.py --recreate` against a server:
 
 ```
-    wiped local storage for 'pdf_rag'
-    created collection 'pdf_rag' (dim=3072, cosine)
-    stored 168/168 chunks
-[6] Qdrant     : collection 'pdf_rag' now holds 168 vectors
+    dropped old collection 'pdf_rag'
+    created collection 'pdf_rag' (dim=384, cosine)
+    stored 1306/1306 chunks
+[6] Qdrant     : collection 'pdf_rag' now holds 1306 vectors
 ```
