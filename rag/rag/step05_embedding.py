@@ -24,6 +24,12 @@ def get_embeddings():
             from langchain_huggingface import HuggingFaceEmbeddings
 
             embeddings = HuggingFaceEmbeddings(model_name=config.EMBEDDING_MODEL)
+        except ImportError as exc:
+            raise RuntimeError(
+                "Local embeddings need the optional packages. Install them with:\n"
+                "    pip install -r requirements-local.txt\n"
+                "or switch to EMBEDDING_PROVIDER=google in .env (no extra install)."
+            ) from exc
         except Exception as exc:  # noqa: BLE001 - re-raised with context
             raise RuntimeError(
                 f"Could not load local embedding model '{config.EMBEDDING_MODEL}'. "
