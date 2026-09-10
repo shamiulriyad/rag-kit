@@ -51,7 +51,7 @@ export default function PlanUsageCard() {
     <section className="card usage">
       <div className="usage__head">
         <span className="usage__plan">
-          <PlanIcon size={16} color={plan === 'free' ? '#c9b6f7' : 'var(--accent)'} />
+          <PlanIcon size={16} color={plan === 'free' ? 'var(--on-primary-soft)' : 'var(--accent)'} />
           {PLANS[plan].name} plan
         </span>
         {isFree ? (

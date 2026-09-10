@@ -7,6 +7,7 @@ import {
   MessagesSquare,
   AlertTriangle,
   RotateCcw,
+  Pin,
 } from 'lucide-react'
 import { Select } from '../components/ui/Field'
 import { Markdown } from '../lib/markdown'
@@ -17,6 +18,8 @@ import {
   sampleSources,
   suggestedPrompts,
 } from '../lib/mockData'
+import { useActivity } from '../lib/activity'
+import { useWorkspace } from '../lib/workspace'
 
 interface ChatTurn {
   id: string
@@ -66,12 +69,17 @@ function CopyButton({ text }: { text: string }) {
 }
 
 export default function ChatPage() {
+  const { log } = useActivity()
+  const { togglePin, isPinned } = useWorkspace()
   const [scope, setScope] = useState<string>('all')
   const [turns, setTurns] = useState<ChatTurn[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
+  const [convId, setConvId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const taRef = useRef<HTMLTextAreaElement>(null)
+
+  const firstQuestion = turns.find((t) => t.role === 'user')?.text ?? ''
 
   useEffect(() => {
     scrollRef.current?.scrollTo({
@@ -92,6 +100,11 @@ export default function ChatPage() {
     if (!q || busy) return
     setInput('')
     if (taRef.current) taRef.current.style.height = 'auto'
+
+    if (turns.length === 0) {
+      setConvId(`cv_${Date.now()}`)
+      log('conversation', `Started a conversation: "${q.slice(0, 60)}${q.length > 60 ? '…' : ''}"`)
+    }
 
     const userTurn: ChatTurn = { id: `u${Date.now()}`, role: 'user', text: q }
     setTurns((t) => [...t, userTurn])
@@ -163,10 +176,35 @@ export default function ChatPage() {
           </Select>
         </div>
         {!empty && (
-          <button className="btn btn--ghost btn--sm" onClick={() => setTurns([])}>
-            <RotateCcw size={14} />
-            New conversation
-          </button>
+          <div style={{ display: 'flex', gap: 'var(--sp-2)' }}>
+            <button
+              className={`btn btn--ghost btn--sm${
+                convId && isPinned(convId) ? ' is-on' : ''
+              }`}
+              onClick={() =>
+                convId &&
+                togglePin({
+                  id: convId,
+                  title:
+                    firstQuestion.slice(0, 60) +
+                    (firstQuestion.length > 60 ? '…' : ''),
+                })
+              }
+            >
+              <Pin size={14} />
+              {convId && isPinned(convId) ? 'Pinned' : 'Pin'}
+            </button>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => {
+                setTurns([])
+                setConvId(null)
+              }}
+            >
+              <RotateCcw size={14} />
+              New conversation
+            </button>
+          </div>
         )}
       </div>
 

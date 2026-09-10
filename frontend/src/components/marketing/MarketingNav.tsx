@@ -6,11 +6,11 @@ import { GithubIcon } from '../ui/icons'
 import { LinkButton } from '../ui/Button'
 
 const LINKS = [
-  { label: 'Features', href: '#features' },
-  { label: 'How It Works', href: '#how' },
-  { label: 'Architecture', href: '#architecture' },
-  { label: 'Pricing', href: '/pricing' },
-  { label: 'Documentation', href: '/docs' },
+  { label: 'Features', to: '/#features' },
+  { label: 'How It Works', to: '/#how' },
+  { label: 'Architecture', to: '/#architecture' },
+  { label: 'Pricing', to: '/pricing' },
+  { label: 'Documentation', to: '/docs' },
 ]
 
 const GITHUB_URL = 'https://github.com/shamiulriyad/rag-kit'
@@ -32,17 +32,11 @@ export default function MarketingNav() {
         <Logo />
 
         <nav className="mnav__links">
-          {LINKS.map((l) =>
-            l.href.startsWith('#') ? (
-              <a key={l.label} className="mnav__link" href={l.href}>
-                {l.label}
-              </a>
-            ) : (
-              <Link key={l.label} className="mnav__link" to={l.href}>
-                {l.label}
-              </Link>
-            ),
-          )}
+          {LINKS.map((l) => (
+            <Link key={l.label} className="mnav__link" to={l.to}>
+              {l.label}
+            </Link>
+          ))}
           <a
             className="mnav__link"
             href={GITHUB_URL}
@@ -72,17 +66,11 @@ export default function MarketingNav() {
       </div>
 
       <div className={`mnav__mobile${open ? ' mnav__mobile--open' : ''}`}>
-        {LINKS.map((l) =>
-          l.href.startsWith('#') ? (
-            <a key={l.label} href={l.href} onClick={() => setOpen(false)}>
-              {l.label}
-            </a>
-          ) : (
-            <Link key={l.label} to={l.href} onClick={() => setOpen(false)}>
-              {l.label}
-            </Link>
-          ),
-        )}
+        {LINKS.map((l) => (
+          <Link key={l.label} to={l.to} onClick={() => setOpen(false)}>
+            {l.label}
+          </Link>
+        ))}
         <a
           href={GITHUB_URL}
           target="_blank"

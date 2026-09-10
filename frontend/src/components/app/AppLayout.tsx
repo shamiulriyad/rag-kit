@@ -1,14 +1,16 @@
 import { useState } from 'react'
 import { Outlet, useLocation, Link } from 'react-router-dom'
-import { Menu, Sparkles } from 'lucide-react'
+import { Menu, Search, Sparkles } from 'lucide-react'
 import Sidebar from './Sidebar'
+import HelpMenu from './HelpMenu'
+import ShortcutsModal from './ShortcutsModal'
+import NotificationBell from '../notifications/NotificationBell'
+import CommandPalette from '../search/CommandPalette'
 import StatusPill from '../ui/StatusPill'
+import { useUI } from '../../lib/ui'
 
 const TITLES: Record<string, { title: string; subtitle: string }> = {
-  '/dashboard': {
-    title: 'Dashboard',
-    subtitle: 'Overview of your retrieval workspace',
-  },
+  '/dashboard': { title: 'Dashboard', subtitle: 'Overview of your retrieval workspace' },
   '/documents': {
     title: 'Documents',
     subtitle: 'Upload, index and inspect your source PDFs',
@@ -17,19 +19,28 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
     title: 'Knowledge Chat',
     subtitle: 'Ask questions grounded in your documents',
   },
+  '/playground': {
+    title: 'RAG Playground',
+    subtitle: 'Tune retrieval parameters and inspect the pipeline',
+  },
+  '/prompt-playground': {
+    title: 'Prompt Playground',
+    subtitle: 'Shape the system prompt sent to the LLM',
+  },
+  '/billing': { title: 'Billing & Usage', subtitle: 'Plan, limits and monthly usage' },
+  '/team': { title: 'Team', subtitle: 'Members, roles and invitations' },
+  '/activity': { title: 'Activity', subtitle: 'A timeline of everything that happened' },
   '/settings': {
     title: 'Settings',
-    subtitle: 'Pipeline, retrieval and provider configuration',
+    subtitle: 'Pipeline, retrieval, appearance and providers',
   },
-  '/docs': {
-    title: 'Documentation',
-    subtitle: 'Everything you need to run RAG Starter',
-  },
+  '/docs': { title: 'Documentation', subtitle: 'Everything you need to run RAG Starter' },
 }
 
 export default function AppLayout() {
   const [open, setOpen] = useState(false)
   const { pathname } = useLocation()
+  const { setSearchOpen } = useUI()
   const meta = TITLES[pathname] ?? { title: 'RAG Starter', subtitle: '' }
 
   return (
@@ -54,6 +65,17 @@ export default function AppLayout() {
           </div>
 
           <div className="topbar__actions">
+            <button
+              className="searchbtn"
+              onClick={() => setSearchOpen(true)}
+              aria-label="Search"
+            >
+              <Search size={15} />
+              <span>Search…</span>
+              <kbd>Ctrl K</kbd>
+            </button>
+            <NotificationBell />
+            <HelpMenu />
             <StatusPill status="ok" label="All systems operational" />
             {pathname !== '/chat' && (
               <Link className="btn btn--secondary btn--sm" to="/chat">
@@ -66,6 +88,9 @@ export default function AppLayout() {
 
         <Outlet />
       </div>
+
+      <CommandPalette />
+      <ShortcutsModal />
     </div>
   )
 }

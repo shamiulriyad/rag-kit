@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { KeyRound, Save, RotateCcw, Check } from 'lucide-react'
+import { KeyRound, Save, RotateCcw, Check, Moon, Sun, Monitor } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Field, Input, Select } from '../components/ui/Field'
 import { useToast } from '../components/ui/Toast'
 import { PLANS, usePlan } from '../lib/plan'
+import { useTheme, type ThemePref } from '../lib/theme'
 
 interface Config {
   llmProvider: string
@@ -45,14 +46,22 @@ const SECTIONS = [
   { id: 'providers', label: 'Providers & Models' },
   { id: 'vector', label: 'Qdrant & Collection' },
   { id: 'retrieval', label: 'Chunking & Retrieval' },
+  { id: 'appearance', label: 'Appearance' },
   { id: 'plan', label: 'Plan & Billing' },
   { id: 'secrets', label: 'Secrets' },
+]
+
+const THEME_OPTIONS: { id: ThemePref; label: string; icon: typeof Moon }[] = [
+  { id: 'dark', label: 'Dark', icon: Moon },
+  { id: 'light', label: 'Light', icon: Sun },
+  { id: 'system', label: 'System', icon: Monitor },
 ]
 
 export default function SettingsPage() {
   const toast = useToast()
   const navigate = useNavigate()
   const { plan, changePlan } = usePlan()
+  const { pref, setPref } = useTheme()
   const [cfg, setCfg] = useState<Config>(load)
   const [active, setActive] = useState('providers')
 
@@ -264,6 +273,33 @@ export default function SettingsPage() {
             </div>
           )}
 
+          {active === 'appearance' && (
+            <div className="card settings-section">
+              <h3>Appearance</h3>
+              <Field
+                label="Theme"
+                hint="Applies instantly and is remembered on this device. The premium design is preserved in both themes."
+              >
+                {() => (
+                  <div className="segmented" role="tablist" aria-label="Theme">
+                    {THEME_OPTIONS.map((o) => (
+                      <button
+                        key={o.id}
+                        role="tab"
+                        aria-selected={pref === o.id}
+                        className={pref === o.id ? 'is-active' : ''}
+                        onClick={() => setPref(o.id)}
+                      >
+                        <o.icon size={15} />
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </Field>
+            </div>
+          )}
+
           {active === 'plan' && (
             <div className="card settings-section">
               <h3>Plan &amp; Billing</h3>
@@ -361,7 +397,7 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {active !== 'plan' && active !== 'secrets' && (
+          {active !== 'plan' && active !== 'secrets' && active !== 'appearance' && (
             <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
               <Button onClick={save}>
                 <Save size={15} />

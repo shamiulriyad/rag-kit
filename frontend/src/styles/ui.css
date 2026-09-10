@@ -97,12 +97,12 @@
 .badge--primary {
   border-color: var(--primary-ring);
   background: var(--primary-soft);
-  color: #c9b6f7;
+  color: var(--on-primary-soft);
 }
 .badge--accent {
   border-color: color-mix(in srgb, var(--accent) 40%, transparent);
   background: var(--accent-soft);
-  color: #7fdfeb;
+  color: var(--on-accent-soft);
 }
 .badge__dot {
   width: 6px;

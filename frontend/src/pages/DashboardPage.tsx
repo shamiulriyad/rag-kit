@@ -8,9 +8,13 @@ import {
   Upload,
   Sparkles,
   Settings2,
-  BookOpen,
+  FlaskConical,
   ArrowUpRight,
+  Database,
+  Star,
+  History,
 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import StatCard from '../components/ui/StatCard'
 import StatusPill from '../components/ui/StatusPill'
 import PlanUsageCard from '../components/app/PlanUsageCard'
@@ -20,10 +24,24 @@ import {
   mockQuestions,
   systemHealth,
 } from '../lib/mockData'
+import { mockKnowledgeBases, type ActivityType } from '../lib/appData'
 import { formatNumber, relativeTime } from '../lib/format'
+import { useWorkspace } from '../lib/workspace'
+import { useActivity } from '../lib/activity'
+
+const ACTIVITY_ICON: Record<ActivityType, LucideIcon> = {
+  upload: Upload,
+  kb_created: Database,
+  conversation: MessageSquare,
+  delete: FileText,
+  settings: Settings2,
+  prompt: FileText,
+}
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const { isKbStarred, toggleKb } = useWorkspace()
+  const { entries } = useActivity()
   const [apiOnline, setApiOnline] = useState<boolean | null>(null)
 
   useEffect(() => {
@@ -172,11 +190,76 @@ export default function DashboardPage() {
               <strong>Tune retrieval</strong>
               <span>Chunk size, overlap, top-K</span>
             </button>
-            <button className="quick__btn" onClick={() => navigate('/docs')}>
-              <BookOpen />
-              <strong>Read the docs</strong>
-              <span>Setup & architecture</span>
+            <button className="quick__btn" onClick={() => navigate('/playground')}>
+              <FlaskConical />
+              <strong>Open Playground</strong>
+              <span>Experiment with retrieval</span>
             </button>
+          </div>
+        </section>
+      </div>
+
+      <div className="grid-2">
+        <section className="card">
+          <div className="panel-head">
+            <h3>Knowledge Bases</h3>
+            <span className="muted" style={{ fontSize: '0.8rem' }}>
+              {mockKnowledgeBases.length} total
+            </span>
+          </div>
+          <div className="list">
+            {mockKnowledgeBases.map((kb) => (
+              <div className="list__row" key={kb.id}>
+                <span className="list__icon">
+                  <Database />
+                </span>
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <div className="truncate" style={{ color: 'var(--text)' }}>
+                    {kb.name}
+                  </div>
+                  <div className="list__meta">
+                    {kb.documents} docs · {formatNumber(kb.chunks)} chunks ·{' '}
+                    {relativeTime(kb.updatedAt)}
+                  </div>
+                </div>
+                <button
+                  className="starbtn"
+                  aria-label={isKbStarred(kb.id) ? 'Unstar' : 'Star'}
+                  aria-pressed={isKbStarred(kb.id)}
+                  onClick={() => toggleKb(kb.id)}
+                >
+                  <Star size={15} fill={isKbStarred(kb.id) ? 'currentColor' : 'none'} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="panel-head">
+            <h3>Recent activity</h3>
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={() => navigate('/activity')}
+            >
+              View all <ArrowUpRight size={14} />
+            </button>
+          </div>
+          <div className="list">
+            {entries.slice(0, 6).map((e) => {
+              const Icon = ACTIVITY_ICON[e.type] ?? History
+              return (
+                <div className="list__row" key={e.id}>
+                  <span className="list__icon">
+                    <Icon />
+                  </span>
+                  <div className="grow" style={{ minWidth: 0 }}>
+                    <div className="truncate">{e.text}</div>
+                    <div className="list__meta">{relativeTime(e.at)}</div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         </section>
       </div>

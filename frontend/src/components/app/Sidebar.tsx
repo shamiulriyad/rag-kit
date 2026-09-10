@@ -3,6 +3,11 @@ import {
   LayoutDashboard,
   FileText,
   MessagesSquare,
+  FlaskConical,
+  SquareTerminal,
+  CreditCard,
+  Users,
+  History,
   Settings,
   BookOpen,
   LogOut,
@@ -10,6 +15,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import Logo from '../ui/Logo'
 import { GithubIcon } from '../ui/icons'
+import FavoritesNav from './FavoritesNav'
 import { useAuth } from '../../lib/auth'
 import { initials } from '../../lib/format'
 
@@ -20,6 +26,21 @@ const NAV: { section: string; items: { to: string; label: string; icon: LucideIc
       { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { to: '/documents', label: 'Documents', icon: FileText },
       { to: '/chat', label: 'Knowledge Chat', icon: MessagesSquare },
+    ],
+  },
+  {
+    section: 'Build',
+    items: [
+      { to: '/playground', label: 'RAG Playground', icon: FlaskConical },
+      { to: '/prompt-playground', label: 'Prompt Playground', icon: SquareTerminal },
+    ],
+  },
+  {
+    section: 'Account',
+    items: [
+      { to: '/billing', label: 'Billing & Usage', icon: CreditCard },
+      { to: '/team', label: 'Team', icon: Users },
+      { to: '/activity', label: 'Activity', icon: History },
     ],
   },
   {
@@ -64,6 +85,8 @@ export default function Sidebar({
           ))}
         </div>
       ))}
+
+      <FavoritesNav />
 
       <div className="sidebar__foot">
         <a
