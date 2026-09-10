@@ -6,10 +6,10 @@ import { GithubIcon } from '../ui/icons'
 import { LinkButton } from '../ui/Button'
 
 const LINKS = [
+  { label: 'Product', to: '/#demo' },
   { label: 'Features', to: '/#features' },
-  { label: 'How It Works', to: '/#how' },
-  { label: 'Architecture', to: '/#architecture' },
-  { label: 'Pricing', to: '/pricing' },
+  { label: 'How It Works', to: '/#solution' },
+  { label: 'Pricing', to: '/#pricing' },
   { label: 'Documentation', to: '/docs' },
 ]
 
@@ -52,7 +52,7 @@ export default function MarketingNav() {
             Sign In
           </LinkButton>
           <LinkButton size="sm" to="/signup">
-            Get Started
+            Start Free
           </LinkButton>
           <button
             className="mnav__toggle"

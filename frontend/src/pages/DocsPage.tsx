@@ -1,19 +1,31 @@
-import { useState } from 'react'
+import { useEffect } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { Markdown } from '../lib/markdown'
 import { docsPages } from '../lib/docsContent'
 
+const IDS = docsPages.map((p) => p.id)
+
 export default function DocsPage() {
-  const [activeId, setActiveId] = useState(docsPages[0].id)
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  // The active topic is derived from the URL hash — so /docs#configuration
+  // (e.g. from the footer) deep-links straight to that topic, and browser
+  // back/forward moves between topics.
+  const hashId = decodeURIComponent(location.hash.replace('#', ''))
+  const activeId = IDS.includes(hashId) ? hashId : docsPages[0].id
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [activeId])
+
   const index = docsPages.findIndex((p) => p.id === activeId)
   const page = docsPages[index]
   const prev = docsPages[index - 1]
   const next = docsPages[index + 1]
 
-  function go(id: string) {
-    setActiveId(id)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+  const go = (id: string) => navigate(`/docs#${id}`)
 
   return (
     <div className="page">
@@ -30,7 +42,7 @@ export default function DocsPage() {
           ))}
         </nav>
 
-        <article className="docs-content">
+        <article className="docs-content" id={page.id}>
           <span className="eyebrow">Documentation</span>
           <h1>{page.title}</h1>
           <Markdown content={page.body} />

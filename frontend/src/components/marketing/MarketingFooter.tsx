@@ -1,42 +1,41 @@
 import { Link } from 'react-router-dom'
 import Logo from '../ui/Logo'
 
+const GH = 'https://github.com/shamiulriyad/rag-kit'
+
 const COLS: { title: string; links: { label: string; to: string; ext?: boolean }[] }[] = [
   {
     title: 'Product',
     links: [
       { label: 'Features', to: '/#features' },
-      { label: 'How It Works', to: '/#how' },
-      { label: 'Pricing', to: '/pricing' },
+      { label: 'Pricing', to: '/#pricing' },
       { label: 'Dashboard', to: '/dashboard' },
-      { label: 'Knowledge Chat', to: '/chat' },
-    ],
-  },
-  {
-    title: 'Documentation',
-    links: [
-      { label: 'Getting Started', to: '/docs' },
-      { label: 'RAG Pipeline', to: '/docs' },
-      { label: 'Configuration', to: '/docs' },
-      { label: 'Troubleshooting', to: '/docs' },
-    ],
-  },
-  {
-    title: 'Architecture',
-    links: [
-      { label: 'Overview', to: '/#architecture' },
-      { label: 'Backend Connection', to: '/docs' },
-      { label: 'Frontend Connection', to: '/docs' },
-      { label: 'Qdrant', to: '/docs' },
+      { label: 'Playground', to: '/playground' },
     ],
   },
   {
     title: 'Resources',
     links: [
-      { label: 'GitHub', to: 'https://github.com/shamiulriyad/rag-kit', ext: true },
-      { label: 'Qdrant Docs', to: 'https://qdrant.tech/documentation/', ext: true },
-      { label: 'Gemini API', to: 'https://ai.google.dev/', ext: true },
-      { label: 'License (MIT)', to: 'https://opensource.org/license/mit', ext: true },
+      { label: 'Documentation', to: '/docs' },
+      { label: 'Getting Started', to: '/docs#getting-started' },
+      { label: 'Architecture', to: '/docs#architecture' },
+      { label: 'FAQ', to: '/#faq' },
+    ],
+  },
+  {
+    title: 'Community',
+    links: [
+      { label: 'GitHub', to: GH, ext: true },
+      { label: 'Issues', to: `${GH}/issues`, ext: true },
+      { label: 'Discussions', to: `${GH}/discussions`, ext: true },
+    ],
+  },
+  {
+    title: 'Project',
+    links: [
+      { label: 'Changelog', to: `${GH}/releases`, ext: true },
+      { label: 'Roadmap', to: `${GH}/milestones`, ext: true },
+      { label: 'License (MIT)', to: `${GH}/blob/main/LICENSE`, ext: true },
     ],
   },
 ]
@@ -49,8 +48,9 @@ export default function MarketingFooter() {
           <div className="mfooter__brand">
             <Logo />
             <p>
-              A modular, developer-friendly RAG starter that lets you clone,
-              configure, ingest your documents, and start asking questions.
+              <strong style={{ color: 'var(--text)' }}>RAG Starter</strong>
+              <br />
+              Build RAG Systems. Without Starting From Zero.
             </p>
           </div>
           {COLS.map((col) => (
@@ -76,7 +76,10 @@ export default function MarketingFooter() {
           ))}
         </div>
         <div className="mfooter__bottom">
-          <span>© {new Date().getFullYear()} RAG Starter. Released under the MIT License.</span>
+          <span>
+            © {new Date().getFullYear()} RAG Starter. Released under the MIT
+            License.
+          </span>
           <span>Clone. Configure. Ingest. Ask.</span>
         </div>
       </div>
