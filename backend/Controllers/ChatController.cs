@@ -1,28 +1,40 @@
-using Backend.Models;
+using Backend.DTOs.Chat;
 using Backend.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Backend.Controllers;
 
-[ApiController]
-[Route("api/[controller]")]
-public class ChatController : ControllerBase
+[Route("api/chat")]
+[Tags("Chat")]
+[Authorize]
+public class ChatController : ApiControllerBase
 {
-    private readonly IRagService _rag;
+    private readonly IChatService _chat;
 
-    public ChatController(IRagService rag) => _rag = rag;
+    public ChatController(IChatService chat) => _chat = chat;
 
-    /// <summary>
-    /// POST /api/chat - forward a question to the Python RAG service and return
-    /// its answer plus sources. No RAG logic lives here.
-    /// </summary>
-    [HttpPost]
-    public async Task<ActionResult<ChatResponse>> Post([FromBody] ChatRequest request, CancellationToken ct)
+    [HttpPost("sessions")]
+    public async Task<ActionResult> CreateSession([FromBody] CreateChatSessionRequest request, CancellationToken ct) =>
+        Success(await _chat.CreateSessionAsync(CurrentUserId, request, ct), "Conversation started.");
+
+    [HttpGet("sessions")]
+    public async Task<ActionResult> ListSessions(CancellationToken ct) => Success(await _chat.ListSessionsAsync(CurrentUserId, ct));
+
+    [HttpGet("sessions/{id:guid}")]
+    public async Task<ActionResult> GetSession(Guid id, CancellationToken ct) => Success(await _chat.GetSessionAsync(id, CurrentUserId, ct));
+
+    [HttpDelete("sessions/{id:guid}")]
+    public async Task<ActionResult> DeleteSession(Guid id, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(request.Question))
-            return BadRequest(new { error = "question is required" });
-
-        var answer = await _rag.AskAsync(request, ct);
-        return Ok(answer);
+        await _chat.DeleteSessionAsync(id, CurrentUserId, ct);
+        return Success("Conversation deleted.");
     }
+
+    /// <summary>POST /api/chat/sessions/{id}/messages - ask a question against the
+    /// session's Knowledge Base. Validates the caller + Knowledge Base, checks the
+    /// monthly question limit, forwards to Python, then persists the exchange.</summary>
+    [HttpPost("sessions/{id:guid}/messages")]
+    public async Task<ActionResult> Ask(Guid id, [FromBody] AskMessageRequest request, CancellationToken ct) =>
+        Success(await _chat.AskAsync(id, CurrentUserId, request, ct));
 }

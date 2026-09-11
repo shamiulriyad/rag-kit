@@ -25,9 +25,9 @@ def answer_once(question: str, embeddings, vector_store, llm) -> dict:
 
 
 def main() -> None:
-    index_meta.check_before_query()                                 # model still matches the index?
+    index_meta.check_before_query(config.COLLECTION_NAME)           # model still matches the index?
     embeddings = get_embeddings()                                   # 5 (reused)
-    vector_store = get_vector_store(embeddings)                     # 6 (read side)
+    vector_store = get_vector_store(embeddings, config.COLLECTION_NAME)  # 6 (read side)
     llm = get_llm()
 
     if sys.argv[1:]:

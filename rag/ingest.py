@@ -29,7 +29,7 @@ def main() -> None:
     pages = clean_documents(pages)                                  # 3
     chunks = chunk_documents(pages, config.CHUNK_SIZE, config.CHUNK_OVERLAP)  # 4
     embeddings = get_embeddings()                                   # 5
-    store_chunks(chunks, embeddings, recreate=args.recreate)        # 6
+    store_chunks(chunks, embeddings, config.COLLECTION_NAME, recreate=args.recreate)  # 6
 
     print("\nDone. Now ask something:  python ask.py \"your question\"")
 

@@ -1,17 +1,23 @@
 # One command to run the whole kit:
 #
-#     cp .env.example .env      # then put your Gemini API key in it
+#     cp .env.example .env      # then fill in GOOGLE_API_KEY and DATABASE_CONNECTION_STRING
 #     docker compose up --build
 #
-# Then open http://localhost:5173, upload a PDF, and ask questions.
+# Then open http://localhost:5173, register an account, create a Knowledge Base,
+# upload a PDF, and ask questions.
 #
 #   frontend  http://localhost:5173   nginx serving the React build
 #   backend   http://localhost:5038   ASP.NET Core API (React talks to this)
 #   rag       http://localhost:8000   Python FastAPI RAG service
-#   qdrant    http://localhost:6333   vector database (SERVER mode)
+#   qdrant    http://localhost:6333   vector database (SERVER mode - one collection per Knowledge Base)
 #
-# Qdrant runs as a real server here, so uploading a PDF in the UI indexes it
-# straight away - no separate `python ingest.py` step.
+# Supabase (Postgres + Storage) is an external hosted service, not a container
+# here (spec: "do not run a local PostgreSQL container"). Set
+# DATABASE_CONNECTION_STRING to a real Supabase project before `docker compose up`
+# for accounts/Knowledge Bases/chat history to persist; without it the backend
+# still starts (so you can see it's alive) but every DB-backed endpoint fails
+# until it's configured. Leaving SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY blank is
+# fine even in Docker - uploaded PDFs then fall back to a local-disk volume.
 
 services:
   qdrant:
@@ -38,7 +44,7 @@ services:
       EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-google}
       EMBEDDING_MODEL: ${EMBEDDING_MODEL:-gemini-embedding-001}
       QDRANT_URL: http://qdrant:6333     # the compose service name
-      QDRANT_PATH: ""                    # empty => server mode (required for UI upload)
+      QDRANT_PATH: ""                    # empty => server mode (required - one collection per Knowledge Base)
       COLLECTION_NAME: ${COLLECTION_NAME:-pdf_rag}
       LLM_MODEL: ${LLM_MODEL:-gemini-2.5-flash}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-200}
@@ -52,10 +58,19 @@ services:
     ports:
       - "5038:8080"
     environment:
+      DATABASE_CONNECTION_STRING: ${DATABASE_CONNECTION_STRING:-}
+      Supabase__Url: ${SUPABASE_URL:-}
+      Supabase__ServiceRoleKey: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      Supabase__AnonKey: ${SUPABASE_ANON_KEY:-}
+      Jwt__Secret: ${JWT_SECRET:-}
       Rag__BaseUrl: http://rag:8000
       Rag__TimeoutSeconds: "600"
       Upload__MaxBytes: ${UPLOAD_MAX_BYTES:-209715200}   # ~200 MB, matches MAX_UPLOAD_MB
       Cors__Origins__0: http://localhost:5173
+    volumes:
+      # Only used when Supabase Storage isn't configured (see IStorageService) -
+      # keeps uploaded PDFs across container restarts during local trials.
+      - backend_storage:/app/storage_data
     depends_on:
       - rag
 
@@ -73,3 +88,4 @@ services:
 
 volumes:
   qdrant_storage:
+  backend_storage:
