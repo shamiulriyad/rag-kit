@@ -12,8 +12,8 @@ public record UpdateUserSettingsRequest(
     string? Theme,
     string? DefaultModel,
     string? EmbeddingModel,
-    [property: Range(100, 4000)] int? ChunkSize,
-    [property: Range(0, 1000)] int? ChunkOverlap,
-    [property: Range(1, 20)] int? TopK,
-    [property: Range(0, 1)] double? SimilarityThreshold,
-    [property: Range(0, 2)] double? Temperature);
+    [Range(100, 4000)] int? ChunkSize,
+    [Range(0, 1000)] int? ChunkOverlap,
+    [Range(1, 20)] int? TopK,
+    [Range(0, 1)] double? SimilarityThreshold,
+    [Range(0, 2)] double? Temperature);

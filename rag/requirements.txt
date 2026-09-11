@@ -19,8 +19,12 @@ langchain-google-genai>=2.1.0
 # It pulls in torch (~2 GB), which the default Gemini setup does not need.
 
 # ---- Step 6: Qdrant vector store ----
-langchain-qdrant>=0.2.0
-qdrant-client>=1.9.0
+# langchain-qdrant 1.x requires qdrant-client>=1.15.1 - keep both current together,
+# and keep docker-compose.yml's qdrant image at a version within one minor release
+# of whatever qdrant-client resolves to here (a bigger gap breaks get_collection/query
+# with an opaque "zstd decompressor error", not a memory problem despite the message).
+langchain-qdrant>=1.1.0
+qdrant-client>=1.15.1,<2.0.0
 
 # ---- HTTP API (main.py - the service the .NET backend calls) ----
 fastapi>=0.115.0

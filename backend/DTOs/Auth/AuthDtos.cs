@@ -3,22 +3,22 @@ using System.ComponentModel.DataAnnotations;
 namespace Backend.DTOs.Auth;
 
 public record RegisterRequest(
-    [property: Required, MinLength(2, ErrorMessage = "Enter your full name.")] string FullName,
-    [property: Required, EmailAddress] string Email,
-    [property: Required, MinLength(8, ErrorMessage = "Password must be at least 8 characters.")] string Password);
+    [Required, MinLength(2, ErrorMessage = "Enter your full name.")] string FullName,
+    [Required, EmailAddress] string Email,
+    [Required, MinLength(8, ErrorMessage = "Password must be at least 8 characters.")] string Password);
 
 public record LoginRequest(
-    [property: Required, EmailAddress] string Email,
-    [property: Required] string Password);
+    [Required, EmailAddress] string Email,
+    [Required] string Password);
 
-public record RefreshRequest([property: Required] string RefreshToken);
+public record RefreshRequest([Required] string RefreshToken);
 
 public record ChangePasswordRequest(
-    [property: Required] string CurrentPassword,
-    [property: Required, MinLength(8, ErrorMessage = "Password must be at least 8 characters.")] string NewPassword);
+    [Required] string CurrentPassword,
+    [Required, MinLength(8, ErrorMessage = "Password must be at least 8 characters.")] string NewPassword);
 
 public record UpdateProfileRequest(
-    [property: MinLength(2)] string? FullName,
+    [MinLength(2)] string? FullName,
     string? AvatarUrl);
 
 /// <summary>What the frontend's mock <c>MockUser</c> becomes for real - see

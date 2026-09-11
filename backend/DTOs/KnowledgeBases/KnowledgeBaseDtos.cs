@@ -16,19 +16,19 @@ public record KnowledgeBaseStatsResponse(
     long StorageBytes);
 
 public record CreateKnowledgeBaseRequest(
-    [property: Required, MinLength(2), MaxLength(200)] string Name,
-    [property: MaxLength(2000)] string? Description,
+    [Required, MinLength(2), MaxLength(200)] string Name,
+    [MaxLength(2000)] string? Description,
     Guid? WorkspaceId);
 
 public record UpdateKnowledgeBaseRequest(
-    [property: MinLength(2), MaxLength(200)] string? Name,
-    [property: MaxLength(2000)] string? Description);
+    [MinLength(2), MaxLength(200)] string? Name,
+    [MaxLength(2000)] string? Description);
 
 public record KnowledgeBaseMemberResponse(
     Guid Id, Guid UserId, string Email, string FullName, string Role, DateTimeOffset CreatedAt);
 
 public record AddKnowledgeBaseMemberRequest(
-    [property: Required, EmailAddress] string Email,
-    [property: Required] string Role);
+    [Required, EmailAddress] string Email,
+    [Required] string Role);
 
-public record UpdateKnowledgeBaseMemberRequest([property: Required] string Role);
+public record UpdateKnowledgeBaseMemberRequest([Required] string Role);

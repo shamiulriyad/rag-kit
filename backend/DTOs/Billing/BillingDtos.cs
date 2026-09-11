@@ -20,4 +20,4 @@ public record UsageResponse(
 /// <summary>Dev-only mock activation (spec section 5) - no payment provider is involved.
 /// Real Stripe/checkout integration replaces this endpoint later without touching the
 /// Subscription/Plan schema.</summary>
-public record MockActivateRequest([property: Required] string PlanCode);
+public record MockActivateRequest([Required] string PlanCode);

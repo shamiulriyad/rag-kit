@@ -18,13 +18,13 @@ public record ChatMessageResponse(
 public record ChatSessionDetailResponse(ChatSessionResponse Session, List<ChatMessageResponse> Messages);
 
 public record CreateChatSessionRequest(
-    [property: Required] Guid KnowledgeBaseId,
+    [Required] Guid KnowledgeBaseId,
     string? Title);
 
-public record RenameChatSessionRequest([property: Required, MinLength(1), MaxLength(300)] string Title);
+public record RenameChatSessionRequest([Required, MinLength(1), MaxLength(300)] string Title);
 
 public record AskMessageRequest(
-    [property: Required, MinLength(1)] string Question,
+    [Required, MinLength(1)] string Question,
     int? TopK);
 
 /// <summary>Matches the exact shape given in the spec's Chat API section: an answer plus

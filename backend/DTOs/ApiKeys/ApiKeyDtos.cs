@@ -8,5 +8,5 @@ public record ApiKeyResponse(Guid Id, string Name, string Prefix, DateTimeOffset
 public record ApiKeyCreatedResponse(Guid Id, string Name, string RawKey, DateTimeOffset CreatedAt);
 
 public record CreateApiKeyRequest(
-    [property: Required, MinLength(2), MaxLength(100)] string Name,
+    [Required, MinLength(2), MaxLength(100)] string Name,
     DateTimeOffset? ExpiresAt);

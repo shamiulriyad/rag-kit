@@ -103,6 +103,21 @@ builder.Services.AddHttpClient<IRagService, RagService>(client =>
     client.Timeout = TimeSpan.FromSeconds(rag.TimeoutSeconds);
 });
 
+// The spec (and Supabase's own dashboard) names these flat - SUPABASE_URL, SUPABASE_ANON_KEY,
+// SUPABASE_SERVICE_ROLE_KEY - not Supabase__Url etc. Map them onto the "Supabase" section so
+// both naming styles work (docker-compose.yml already maps flat -> Supabase__* itself).
+foreach (var (flatKey, sectionKey) in new[]
+         {
+             ("SUPABASE_URL", "Supabase:Url"),
+             ("SUPABASE_ANON_KEY", "Supabase:AnonKey"),
+             ("SUPABASE_SERVICE_ROLE_KEY", "Supabase:ServiceRoleKey"),
+         })
+{
+    var flatValue = builder.Configuration[flatKey];
+    if (!string.IsNullOrWhiteSpace(flatValue) && string.IsNullOrWhiteSpace(builder.Configuration[sectionKey]))
+        builder.Configuration[sectionKey] = flatValue;
+}
+
 builder.Services.Configure<SupabaseOptions>(builder.Configuration.GetSection("Supabase"));
 var supabase = builder.Configuration.GetSection("Supabase").Get<SupabaseOptions>() ?? new SupabaseOptions();
 if (supabase.IsConfigured)

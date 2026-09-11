@@ -21,7 +21,10 @@
 
 services:
   qdrant:
-    image: qdrant/qdrant:v1.12.4
+    # Keep within one minor version of qdrant-client in rag/requirements.txt (>=1.15.1) -
+    # a bigger gap breaks get_collection/query with an opaque "zstd decompressor error"
+    # that looks like an out-of-memory failure but is actually a version mismatch.
+    image: qdrant/qdrant:v1.15.4
     ports:
       - "6333:6333"
     volumes:
