@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Info } from 'lucide-react'
 import AuthScaffold from '../components/app/AuthScaffold'
 import { Button } from '../components/ui/Button'
 import { Field, Input } from '../components/ui/Field'
@@ -37,14 +36,6 @@ export default function SignupPage() {
           <p className="muted">Spin up a RAG Starter workspace in seconds.</p>
         </div>
 
-        <div className="auth__mock">
-          <Info />
-          <span>
-            Sign-up is mocked on the frontend and stored in this browser via
-            localStorage. No backend account, no email, no password database.
-          </span>
-        </div>
-
         <Field label="Full name">
           {(id) => (
             <Input
@@ -72,7 +63,7 @@ export default function SignupPage() {
           )}
         </Field>
 
-        <Field label="Password" hint="Minimum 6 characters">
+        <Field label="Password" hint="Minimum 8 characters">
           {(id) => (
             <Input
               id={id}

@@ -110,9 +110,9 @@ export default function Sidebar({
           Sign Out
         </button>
         <NavLink to="/settings" className="sidebar__user" onClick={onNavigate}>
-          <span className="avatar">{initials(user?.name ?? 'U')}</span>
+          <span className="avatar">{initials(user?.fullName ?? 'U')}</span>
           <div>
-            <strong>{user?.name}</strong>
+            <strong>{user?.fullName}</strong>
             <span>{user?.email}</span>
           </div>
         </NavLink>

@@ -1,6 +1,8 @@
-/* Mock authentication. Frontend-only, backed by localStorage.
-   No JWT, no Identity, no backend session — this exists purely so the app
-   can present a real SaaS auth experience while the brief keeps auth mocked. */
+/* Real authentication against the ASP.NET Core backend (Controllers/AuthController.cs).
+   Access + refresh tokens and the current profile are persisted to localStorage so a
+   page reload doesn't force a re-login; setAccessToken/setRefreshHandler wire this
+   session into services/api.ts so every request carries it and a 401 gets one silent
+   refresh-and-retry. */
 
 import {
   createContext,
@@ -11,47 +13,53 @@ import {
   useState,
   type ReactNode,
 } from 'react'
+import {
+  ApiError,
+  getMe,
+  login as apiLogin,
+  logout as apiLogout,
+  refreshTokens as apiRefreshTokens,
+  register as apiRegister,
+  setAccessToken,
+  setRefreshHandler,
+  type AuthResponse,
+  type UserProfile,
+} from '../services/api'
 
-export interface MockUser {
-  name: string
-  email: string
+interface Session {
+  accessToken: string
+  refreshToken: string
+  user: UserProfile
 }
 
 interface AuthValue {
-  user: MockUser | null
+  user: UserProfile | null
   ready: boolean
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (name: string, email: string, password: string) => Promise<void>
+  signUp: (fullName: string, email: string, password: string) => Promise<void>
   signOut: () => void
 }
 
-const STORAGE_KEY = 'rag-starter.auth.user'
+const STORAGE_KEY = 'rag-starter.auth.session'
 
 const AuthContext = createContext<AuthValue | null>(null)
 
-function readStored(): MockUser | null {
+function readStored(): Session | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as MockUser) : null
+    return raw ? (JSON.parse(raw) as Session) : null
   } catch {
     return null
   }
 }
 
-// Small artificial delay so buttons get to show their loading state.
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<MockUser | null>(null)
+  const [session, setSession] = useState<Session | null>(null)
   const [ready, setReady] = useState(false)
 
-  useEffect(() => {
-    setUser(readStored())
-    setReady(true)
-  }, [])
-
-  const persist = useCallback((next: MockUser | null) => {
-    setUser(next)
+  const persist = useCallback((next: Session | null) => {
+    setSession(next)
+    setAccessToken(next?.accessToken ?? null)
     try {
       if (next) localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
       else localStorage.removeItem(STORAGE_KEY)
@@ -60,35 +68,79 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  const persistAuthResponse = useCallback(
+    (res: AuthResponse) =>
+      persist({ accessToken: res.accessToken, refreshToken: res.refreshToken, user: res.user }),
+    [persist],
+  )
+
+  // Registers with services/api.ts so a 401 anywhere triggers one silent
+  // refresh-and-retry instead of immediately logging the user out.
+  useEffect(() => {
+    setRefreshHandler(async () => {
+      const stored = readStored()
+      if (!stored) return null
+      try {
+        const res = await apiRefreshTokens(stored.refreshToken)
+        persistAuthResponse(res)
+        return res.accessToken
+      } catch {
+        persist(null)
+        return null
+      }
+    })
+    return () => setRefreshHandler(null)
+  }, [persist, persistAuthResponse])
+
+  // On mount: rehydrate from storage, then re-validate against the backend so a
+  // revoked/expired session (or one from a previous account) doesn't linger.
+  useEffect(() => {
+    const stored = readStored()
+    if (!stored) {
+      setReady(true)
+      return
+    }
+    setSession(stored)
+    setAccessToken(stored.accessToken)
+
+    getMe()
+      .then((user) => persist({ ...stored, user }))
+      .catch(() => persist(null))
+      .finally(() => setReady(true))
+    // Runs once on mount — the refresh handler above covers token expiry after that.
+  }, [])
+
   const signIn = useCallback(
     async (email: string, password: string) => {
-      await wait(600)
-      if (!email.includes('@') || password.length < 6) {
-        throw new Error('Enter a valid email and a password of at least 6 characters.')
+      try {
+        persistAuthResponse(await apiLogin(email, password))
+      } catch (err) {
+        throw err instanceof ApiError ? new Error(err.message) : err
       }
-      const name = email.split('@')[0].replace(/[._-]+/g, ' ')
-      persist({ email, name: name.replace(/\b\w/g, (c) => c.toUpperCase()) })
     },
-    [persist],
+    [persistAuthResponse],
   )
 
   const signUp = useCallback(
-    async (name: string, email: string, password: string) => {
-      await wait(700)
-      if (name.trim().length < 2) throw new Error('Please enter your name.')
-      if (!email.includes('@')) throw new Error('Enter a valid email address.')
-      if (password.length < 6)
-        throw new Error('Password must be at least 6 characters.')
-      persist({ name: name.trim(), email })
+    async (fullName: string, email: string, password: string) => {
+      try {
+        persistAuthResponse(await apiRegister(fullName, email, password))
+      } catch (err) {
+        throw err instanceof ApiError ? new Error(err.message) : err
+      }
     },
-    [persist],
+    [persistAuthResponse],
   )
 
-  const signOut = useCallback(() => persist(null), [persist])
+  const signOut = useCallback(() => {
+    const current = session
+    persist(null)
+    if (current) apiLogout(current.refreshToken).catch(() => {})
+  }, [session, persist])
 
   const value = useMemo<AuthValue>(
-    () => ({ user, ready, signIn, signUp, signOut }),
-    [user, ready, signIn, signUp, signOut],
+    () => ({ user: session?.user ?? null, ready, signIn, signUp, signOut }),
+    [session, ready, signIn, signUp, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

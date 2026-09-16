@@ -62,24 +62,6 @@
 .auth__form h1 {
   font-size: 1.7rem;
 }
-.auth__mock {
-  display: flex;
-  gap: var(--sp-3);
-  align-items: flex-start;
-  padding: var(--sp-3) var(--sp-4);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--surface);
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-.auth__mock svg {
-  width: 16px;
-  height: 16px;
-  color: var(--warning);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
 .auth__alt {
   font-size: 0.86rem;
   color: var(--text-muted);

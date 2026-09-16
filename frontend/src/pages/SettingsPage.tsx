@@ -131,10 +131,10 @@ export default function SettingsPage() {
                 <h3>Profile</h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
                   <span className="avatar" style={{ width: 44, height: 44, fontSize: '0.95rem' }}>
-                    {initials(user?.name ?? 'U')}
+                    {initials(user?.fullName ?? 'U')}
                   </span>
                   <div>
-                    <strong>{user?.name}</strong>
+                    <strong>{user?.fullName}</strong>
                     <div className="muted" style={{ fontSize: '0.85rem' }}>
                       {user?.email}
                     </div>
