@@ -26,6 +26,7 @@ public static class DbInitializer
                 PriceMonthly = 0m, PriceYearly = 0m,
                 MaxDocuments = 3, MaxStorageBytes = 500L * 1024 * 1024, MaxChunks = 5_000,
                 MaxQuestionsPerMonth = 100, MaxKnowledgeBases = 1, TeamWorkspaceEnabled = false,
+                AllowAdvancedSettings = false,
             },
             new Plan
             {
@@ -33,6 +34,7 @@ public static class DbInitializer
                 PriceMonthly = 12m, PriceYearly = 120m,
                 MaxDocuments = 50, MaxStorageBytes = 10L * 1024 * 1024 * 1024, MaxChunks = 100_000,
                 MaxQuestionsPerMonth = 5_000, MaxKnowledgeBases = 10, TeamWorkspaceEnabled = false,
+                AllowAdvancedSettings = true,
             },
             new Plan
             {
@@ -40,6 +42,7 @@ public static class DbInitializer
                 PriceMonthly = 29m, PriceYearly = 290m,
                 MaxDocuments = 200, MaxStorageBytes = 50L * 1024 * 1024 * 1024, MaxChunks = 500_000,
                 MaxQuestionsPerMonth = 25_000, MaxKnowledgeBases = 50, TeamWorkspaceEnabled = true,
+                AllowAdvancedSettings = true,
             },
         };
 
@@ -57,6 +60,7 @@ public static class DbInitializer
                 current.MaxQuestionsPerMonth = plan.MaxQuestionsPerMonth;
                 current.MaxKnowledgeBases = plan.MaxKnowledgeBases;
                 current.TeamWorkspaceEnabled = plan.TeamWorkspaceEnabled;
+                current.AllowAdvancedSettings = plan.AllowAdvancedSettings;
             }
             else
             {

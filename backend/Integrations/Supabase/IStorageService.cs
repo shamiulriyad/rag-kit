@@ -7,11 +7,15 @@ namespace Backend.Integrations.Supabase;
 public interface IStorageService
 {
     /// <summary>Uploads <paramref name="content"/> to <paramref name="path"/> (e.g.
-    /// "documents/{userId}/{knowledgeBaseId}/{documentId}.pdf") and returns the stored path -
-    /// never a public URL, never the file itself, just what <see cref="Models.Document.StoragePath"/> stores.</summary>
+    /// "documents/{workspaceId}/{knowledgeBaseId}/{documentId}.pdf", falling back to the
+    /// owner's user id for personal KBs) and returns the stored path - never a public URL,
+    /// never the file itself, just what <see cref="Models.Document.StoragePath"/> stores.</summary>
     Task<string> UploadAsync(string path, Stream content, string contentType, CancellationToken ct);
 
     Task<Stream> DownloadAsync(string path, CancellationToken ct);
 
     Task DeleteAsync(string path, CancellationToken ct);
+
+    /// <summary>Cheap reachability check for GET /api/health - never a full upload/download.</summary>
+    Task<bool> IsHealthyAsync(CancellationToken ct);
 }

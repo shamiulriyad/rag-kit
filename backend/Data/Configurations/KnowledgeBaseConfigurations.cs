@@ -51,3 +51,19 @@ public class DocumentConfiguration : IEntityTypeConfiguration<Document>
         b.HasOne(x => x.UploadedByUser).WithMany().HasForeignKey(x => x.UploadedBy).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+public class DocumentProcessingJobConfiguration : IEntityTypeConfiguration<DocumentProcessingJob>
+{
+    public void Configure(EntityTypeBuilder<DocumentProcessingJob> b)
+    {
+        b.ToTable("document_processing_jobs");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
+        b.Property(x => x.ErrorMessage).HasMaxLength(2000);
+        b.HasIndex(x => new { x.Status, x.CreatedAt }); // background service polls "oldest Queued"
+        b.HasIndex(x => x.DocumentId);
+        b.HasIndex(x => x.KnowledgeBaseId);
+
+        b.HasOne(x => x.Document).WithMany().HasForeignKey(x => x.DocumentId).OnDelete(DeleteBehavior.Cascade);
+    }
+}

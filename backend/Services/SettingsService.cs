@@ -34,6 +34,18 @@ public class SettingsService : ISettingsService
         if (request.ChunkOverlap is int overlap && request.ChunkSize is int size && overlap >= size)
             throw new ValidationAppException("Chunk overlap must be smaller than chunk size.");
 
+        var touchesAdvanced = request.ChunkSize is not null || request.ChunkOverlap is not null
+            || request.TopK is not null || request.SimilarityThreshold is not null || request.Temperature is not null;
+        if (touchesAdvanced)
+        {
+            var user = await _db.Users.Include(u => u.Plan).FirstOrDefaultAsync(u => u.Id == userId, ct)
+                ?? throw new NotFoundException("User not found.");
+            var allowAdvanced = user.Plan?.AllowAdvancedSettings
+                ?? (await _db.Plans.FirstAsync(p => p.Code == Models.PlanId.Free, ct)).AllowAdvancedSettings;
+            if (!allowAdvanced)
+                throw new ValidationAppException("Advanced RAG configuration requires a Pro or Team plan.");
+        }
+
         var settings = await GetOrCreateAsync(userId, ct);
 
         if (!string.IsNullOrWhiteSpace(request.Theme)) settings.Theme = request.Theme;

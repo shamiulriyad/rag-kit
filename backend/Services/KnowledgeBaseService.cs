@@ -78,7 +78,7 @@ public class KnowledgeBaseService : IKnowledgeBaseService
         return new KnowledgeBaseStatsResponse(
             kb.Id, kb.DocumentCount, kb.ChunkCount,
             docs.Count(d => d.Status == DocumentStatus.Completed),
-            docs.Count(d => d.Status is DocumentStatus.Processing or DocumentStatus.Pending or DocumentStatus.Uploading),
+            docs.Count(d => d.Status is DocumentStatus.Processing or DocumentStatus.Queued or DocumentStatus.Uploading),
             docs.Count(d => d.Status == DocumentStatus.Failed),
             docs.Sum(d => d.FileSize));
     }
@@ -203,14 +203,17 @@ public class KnowledgeBaseService : IKnowledgeBaseService
 
     public async Task RemoveMemberAsync(Guid id, Guid targetUserId, Guid userId, CancellationToken ct)
     {
-        await _auth.GetKnowledgeBaseAsync(id, userId, MemberRole.Admin, ct);
+        var kb = await _auth.GetKnowledgeBaseAsync(id, userId, MemberRole.Admin, ct);
 
-        var member = await _db.KnowledgeBaseMembers
+        var member = await _db.KnowledgeBaseMembers.Include(m => m.User)
             .FirstOrDefaultAsync(m => m.KnowledgeBaseId == id && m.UserId == targetUserId, ct)
             ?? throw new NotFoundException("Member not found.");
 
         _db.KnowledgeBaseMembers.Remove(member);
         await _db.SaveChangesAsync(ct);
+
+        await _activity.LogAsync(userId, kb.WorkspaceId, ActivityAction.MemberRemoved, "KnowledgeBase", id.ToString(),
+            new { member.User?.Email }, ct);
     }
 
     private static MemberRole RoleOf(KnowledgeBase kb, Guid userId) =>

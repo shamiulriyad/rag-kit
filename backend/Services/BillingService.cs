@@ -43,7 +43,7 @@ public class BillingService : IBillingService
         var sub = await _db.Subscriptions.Include(s => s.Plan)
             .Where(s => s.UserId == userId).OrderByDescending(s => s.CreatedAt).FirstOrDefaultAsync(ct)
             ?? throw new NotFoundException("No subscription found.");
-        return new SubscriptionResponse(sub.Plan?.Code.ToString() ?? "Free", sub.Status, sub.IsMock, sub.StartedAt, sub.CurrentPeriodEnd);
+        return new SubscriptionResponse(sub.Plan?.Code.ToString() ?? "Free", sub.Status.ToString(), sub.IsMock, sub.StartedAt, sub.CurrentPeriodEnd);
     }
 
     public async Task<UsageResponse> GetUsageAsync(Guid userId, CancellationToken ct)
@@ -63,6 +63,7 @@ public class BillingService : IBillingService
             ?? throw new NotFoundException("Plan not found.");
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct)
             ?? throw new NotFoundException("User not found.");
+        var previousPlanId = user.PlanId;
 
         user.PlanId = plan.Id;
         user.UpdatedAt = DateTimeOffset.UtcNow;
@@ -74,14 +75,19 @@ public class BillingService : IBillingService
             _db.Subscriptions.Add(sub);
         }
         sub.PlanId = plan.Id;
-        sub.Status = "active";
+        sub.Status = SubscriptionStatus.Active;
         sub.IsMock = true;
         sub.StartedAt = DateTimeOffset.UtcNow;
         sub.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _db.SaveChangesAsync(ct);
+
+        if (previousPlanId != plan.Id)
+            await _activity.LogAsync(userId, null, ActivityAction.PlanChanged, "Subscription", sub.Id.ToString(),
+                new { Plan = plan.Code.ToString() }, ct);
+
         await _notifications.PushAsync(userId, NotificationType.PlanReminder, "Plan updated", $"You are now on the {plan.Name} plan (dev mock activation).", ct);
 
-        return new SubscriptionResponse(plan.Code.ToString(), sub.Status, sub.IsMock, sub.StartedAt, sub.CurrentPeriodEnd);
+        return new SubscriptionResponse(plan.Code.ToString(), sub.Status.ToString(), sub.IsMock, sub.StartedAt, sub.CurrentPeriodEnd);
     }
 }

@@ -60,7 +60,7 @@ public class AuthService : IAuthService
         };
         _db.Users.Add(user);
 
-        _db.Subscriptions.Add(new Subscription { UserId = user.Id, PlanId = freePlan.Id, Status = "active", IsMock = true });
+        _db.Subscriptions.Add(new Subscription { UserId = user.Id, PlanId = freePlan.Id, Status = SubscriptionStatus.Active, IsMock = true });
         _db.UserSettings.Add(new UserSettings { UserId = user.Id });
 
         await _db.SaveChangesAsync(ct);

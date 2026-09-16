@@ -16,11 +16,12 @@ public class Document
     public long FileSize { get; set; }
     public string FileType { get; set; } = "application/pdf";
 
-    /// <summary>Path inside the storage bucket, e.g. documents/{userId}/{kbId}/{documentId}.pdf.
+    /// <summary>Path inside the storage bucket, e.g. documents/{workspaceId}/{kbId}/{documentId}.pdf
+    /// (falls back to the Knowledge Base owner's user id for personal, non-workspace KBs).
     /// Never a public URL and never the file itself.</summary>
     public string StoragePath { get; set; } = string.Empty;
 
-    public DocumentStatus Status { get; set; } = DocumentStatus.Pending;
+    public DocumentStatus Status { get; set; } = DocumentStatus.Queued;
 
     public int? PageCount { get; set; }
     public int? ChunkCount { get; set; }

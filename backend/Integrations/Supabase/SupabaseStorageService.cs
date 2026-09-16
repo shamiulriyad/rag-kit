@@ -63,4 +63,19 @@ public class SupabaseStorageService : IStorageService
             _log.LogWarning("Supabase Storage delete failed ({Status}): {Detail}", response.StatusCode, detail);
         }
     }
+
+    public async Task<bool> IsHealthyAsync(CancellationToken ct)
+    {
+        try
+        {
+            // Bucket metadata lookup - cheap, no object transfer.
+            using var response = await _http.GetAsync($"storage/v1/bucket/{_options.StorageBucket}", ct);
+            return response.IsSuccessStatusCode;
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Supabase Storage health check failed");
+            return false;
+        }
+    }
 }

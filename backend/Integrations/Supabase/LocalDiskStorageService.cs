@@ -42,6 +42,21 @@ public class LocalDiskStorageService : IStorageService
         return Task.CompletedTask;
     }
 
+    public Task<bool> IsHealthyAsync(CancellationToken ct)
+    {
+        try
+        {
+            var probe = Path.Combine(_root, $".health-{Guid.NewGuid():N}");
+            File.WriteAllBytes(probe, [1]);
+            File.Delete(probe);
+            return Task.FromResult(true);
+        }
+        catch
+        {
+            return Task.FromResult(false);
+        }
+    }
+
     private string Resolve(string path) => Path.Combine(_root, path.Replace('/', Path.DirectorySeparatorChar));
 
     private string ResolveAndEnsureDir(string path)

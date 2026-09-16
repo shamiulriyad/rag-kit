@@ -152,6 +152,9 @@ builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
 builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
 
+// Drains DocumentProcessingJob rows off the request thread - see BackgroundJobs/DocumentProcessingBackgroundService.
+builder.Services.AddHostedService<Backend.BackgroundJobs.DocumentProcessingBackgroundService>();
+
 // ---------------------------------------------------------------------------
 // Rate limiting (spec section 24) - simple fixed-window IP limiting, configured
 // under "IpRateLimiting" in appsettings.json.

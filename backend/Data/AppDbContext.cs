@@ -25,6 +25,7 @@ public class AppDbContext : DbContext
     public DbSet<KnowledgeBase> KnowledgeBases => Set<KnowledgeBase>();
     public DbSet<KnowledgeBaseMember> KnowledgeBaseMembers => Set<KnowledgeBaseMember>();
     public DbSet<Document> Documents => Set<Document>();
+    public DbSet<DocumentProcessingJob> DocumentProcessingJobs => Set<DocumentProcessingJob>();
 
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();

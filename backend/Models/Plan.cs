@@ -21,4 +21,8 @@ public class Plan
     public int MaxKnowledgeBases { get; set; }
 
     public bool TeamWorkspaceEnabled { get; set; }
+
+    /// <summary>Whether this plan may edit advanced RAG settings (chunk size/overlap, top-K,
+    /// similarity threshold, temperature) - see SettingsService.UpdateAsync.</summary>
+    public bool AllowAdvancedSettings { get; set; }
 }

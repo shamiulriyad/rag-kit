@@ -13,8 +13,8 @@ public class Subscription
     public Guid PlanId { get; set; }
     public Plan? Plan { get; set; }
 
-    /// <summary>"active" | "canceled" | "mock" - never touched by a real payment provider yet.</summary>
-    public string Status { get; set; } = "active";
+    /// <summary>Never touched by a real payment provider yet - see <see cref="IsMock"/>.</summary>
+    public SubscriptionStatus Status { get; set; } = SubscriptionStatus.Active;
 
     /// <summary>True when activated via the dev-only mock endpoint rather than a real payment.</summary>
     public bool IsMock { get; set; } = true;

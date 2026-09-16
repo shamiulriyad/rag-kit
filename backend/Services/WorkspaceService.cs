@@ -17,6 +17,7 @@ public interface IWorkspaceService
 
     Task<List<WorkspaceMemberResponse>> ListMembersAsync(Guid id, Guid userId, CancellationToken ct);
     Task<WorkspaceMemberResponse> InviteAsync(Guid id, Guid userId, InviteWorkspaceMemberRequest request, CancellationToken ct);
+    Task<WorkspaceMemberResponse> UpdateMemberRoleAsync(Guid id, Guid memberOrUserId, Guid userId, UpdateWorkspaceMemberRoleRequest request, CancellationToken ct);
     Task RemoveMemberAsync(Guid id, Guid memberOrUserId, Guid userId, CancellationToken ct);
 }
 
@@ -114,16 +115,40 @@ public class WorkspaceService : IWorkspaceService
             member.Id, existingUser?.FullName ?? email, email, role.ToString(), member.Status, member.CreatedAt);
     }
 
-    public async Task RemoveMemberAsync(Guid id, Guid memberOrUserId, Guid userId, CancellationToken ct)
+    public async Task<WorkspaceMemberResponse> UpdateMemberRoleAsync(Guid id, Guid memberOrUserId, Guid userId, UpdateWorkspaceMemberRoleRequest request, CancellationToken ct)
     {
         await _auth.GetWorkspaceAsync(id, userId, MemberRole.Admin, ct);
+
+        if (!Enum.TryParse<MemberRole>(request.Role, true, out var role))
+            throw new ValidationAppException("Role must be Owner, Admin, or Member.");
+
         // Accepts either the WorkspaceMember row id or the member's User id (the spec's
         // route uses {userId}, but a pending invite has no user yet).
-        var member = await _db.WorkspaceMembers.FirstOrDefaultAsync(
+        var member = await _db.WorkspaceMembers.Include(m => m.User).FirstOrDefaultAsync(
+            m => m.WorkspaceId == id && (m.Id == memberOrUserId || m.UserId == memberOrUserId), ct)
+            ?? throw new NotFoundException("Member not found.");
+
+        member.Role = role;
+        await _db.SaveChangesAsync(ct);
+
+        return new WorkspaceMemberResponse(
+            member.Id, member.User?.FullName ?? member.InviteEmail, member.User?.Email ?? member.InviteEmail,
+            role.ToString(), member.Status, member.CreatedAt);
+    }
+
+    public async Task RemoveMemberAsync(Guid id, Guid memberOrUserId, Guid userId, CancellationToken ct)
+    {
+        var workspace = await _auth.GetWorkspaceAsync(id, userId, MemberRole.Admin, ct);
+        // Accepts either the WorkspaceMember row id or the member's User id (the spec's
+        // route uses {userId}, but a pending invite has no user yet).
+        var member = await _db.WorkspaceMembers.Include(m => m.User).FirstOrDefaultAsync(
             m => m.WorkspaceId == id && (m.Id == memberOrUserId || m.UserId == memberOrUserId), ct)
             ?? throw new NotFoundException("Member not found.");
         _db.WorkspaceMembers.Remove(member);
         await _db.SaveChangesAsync(ct);
+
+        await _activity.LogAsync(userId, workspace.Id, ActivityAction.MemberRemoved, "Workspace", id.ToString(),
+            new { Email = member.User?.Email ?? member.InviteEmail }, ct);
     }
 
     private static WorkspaceResponse Map(Workspace w) =>

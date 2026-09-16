@@ -16,11 +16,17 @@ public interface IDocumentService
     Task<DocumentResponse> UploadAsync(Guid knowledgeBaseId, Guid userId, IFormFile file, CancellationToken ct);
     Task DeleteAsync(Guid id, Guid userId, CancellationToken ct);
     Task<DocumentResponse> ReprocessAsync(Guid id, Guid userId, CancellationToken ct);
+
+    // Used only by BackgroundJobs/DocumentProcessingBackgroundService - not exposed on any
+    // controller. Upload/Reprocess just enqueue a DocumentProcessingJob and return
+    // immediately (spec: "do not process large documents inside the HTTP request").
+    Task<Guid?> ClaimNextQueuedJobAsync(CancellationToken ct);
+    Task ProcessJobAsync(Guid jobId, CancellationToken ct);
 }
 
-/// <summary>Owns the upload -> store -> ingest -> update-status flow (spec section 10).
-/// No PDF extraction/chunking/embedding logic here - that's Python's job; this service
-/// only orchestrates storage + the RAG service call.</summary>
+/// <summary>Owns the upload -> store -> enqueue and the actual ingest -> update-status flow
+/// (spec section 10). No PDF extraction/chunking/embedding logic here - that's Python's job;
+/// this service only orchestrates storage + the RAG service call + job/retry bookkeeping.</summary>
 public class DocumentService : IDocumentService
 {
     private static readonly string[] AllowedExtensions = [".pdf"];
@@ -95,7 +101,9 @@ public class DocumentService : IDocumentService
         _db.Documents.Add(document);
         await _db.SaveChangesAsync(ct);
 
-        var storagePath = $"documents/{kb.OwnerId}/{knowledgeBaseId}/{document.Id}.pdf";
+        // Workspace-owned KBs are scoped by workspace; personal KBs (no workspace) fall back
+        // to the owner's user id so documents still land under a stable, unambiguous prefix.
+        var storagePath = $"documents/{kb.WorkspaceId?.ToString() ?? kb.OwnerId.ToString()}/{knowledgeBaseId}/{document.Id}.pdf";
 
         try
         {
@@ -103,42 +111,18 @@ public class DocumentService : IDocumentService
                 await _storage.UploadAsync(storagePath, uploadStream, "application/pdf", ct);
 
             document.StoragePath = storagePath;
-            document.Status = DocumentStatus.Processing;
-            await _db.SaveChangesAsync(ct);
-
-            var settings = await _db.UserSettings.FirstOrDefaultAsync(s => s.UserId == kb.OwnerId, ct);
-
-            RagIngestResult result;
-            await using (var ingestStream = file.OpenReadStream())
-            {
-                result = await _rag.IngestAsync(
-                    kb.QdrantCollectionName, document.Id, ingestStream, document.FileName,
-                    settings?.ChunkSize ?? 1000, settings?.ChunkOverlap ?? 150, ct);
-            }
-
-            document.Status = DocumentStatus.Completed;
-            document.PageCount = result.Pages;
-            document.ChunkCount = result.Chunks;
-            document.ProcessedAt = DateTimeOffset.UtcNow;
+            document.Status = DocumentStatus.Queued;
             document.UpdatedAt = DateTimeOffset.UtcNow;
-
-            kb.DocumentCount++;
-            kb.ChunkCount += result.Chunks;
-            kb.UpdatedAt = DateTimeOffset.UtcNow;
-
+            _db.DocumentProcessingJobs.Add(new DocumentProcessingJob { DocumentId = document.Id, KnowledgeBaseId = knowledgeBaseId });
             await _db.SaveChangesAsync(ct);
 
-            await _limits.RecordDocumentUploadedAsync(kb.OwnerId, file.Length, ct);
-            await _limits.RecordDocumentChunkedAsync(kb.OwnerId, result.Chunks, ct);
             await _activity.LogAsync(userId, kb.WorkspaceId, ActivityAction.DocumentUploaded, "Document", document.Id.ToString(),
                 new { document.FileName, kb.Id }, ct);
-            await _activity.LogAsync(userId, kb.WorkspaceId, ActivityAction.DocumentProcessed, "Document", document.Id.ToString(), ct: ct);
-            await _notifications.PushAsync(kb.OwnerId, NotificationType.DocReady,
-                "Document indexed", $"\"{document.FileName}\" finished processing ({result.Pages} pages, {result.Chunks} chunks).", ct);
 
+            // Processing happens off the request thread - see BackgroundJobs/DocumentProcessingBackgroundService.
             return Map(document);
         }
-        catch (Exception ex) when (ex is RagException or AppException)
+        catch (Exception ex) when (ex is AppException)
         {
             document.Status = DocumentStatus.Failed;
             document.ErrorMessage = ex.Message;
@@ -147,8 +131,6 @@ public class DocumentService : IDocumentService
 
             await _activity.LogAsync(userId, kb.WorkspaceId, ActivityAction.DocumentFailed, "Document", document.Id.ToString(),
                 new { document.FileName, Reason = ex.Message }, ct);
-            await _notifications.PushAsync(kb.OwnerId, NotificationType.DocFailed,
-                "Document failed to process", $"\"{document.FileName}\": {ex.Message}", ct);
 
             throw;
         }
@@ -185,45 +167,119 @@ public class DocumentService : IDocumentService
     public async Task<DocumentResponse> ReprocessAsync(Guid id, Guid userId, CancellationToken ct)
     {
         var doc = await _auth.GetDocumentAsync(id, userId, ct);
-        var kb = doc.KnowledgeBase!;
 
         if (string.IsNullOrEmpty(doc.StoragePath))
             throw new ValidationAppException("This document has no stored file to reprocess.");
 
-        doc.Status = DocumentStatus.Processing;
+        doc.Status = DocumentStatus.Queued;
         doc.ErrorMessage = null;
+        doc.UpdatedAt = DateTimeOffset.UtcNow;
+        _db.DocumentProcessingJobs.Add(new DocumentProcessingJob { DocumentId = doc.Id, KnowledgeBaseId = doc.KnowledgeBaseId });
+        await _db.SaveChangesAsync(ct);
+
+        // Processing happens off the request thread - see BackgroundJobs/DocumentProcessingBackgroundService.
+        return Map(doc);
+    }
+
+    public async Task<Guid?> ClaimNextQueuedJobAsync(CancellationToken ct)
+    {
+        var job = await _db.DocumentProcessingJobs
+            .Where(j => j.Status == DocumentStatus.Queued)
+            .OrderBy(j => j.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+        if (job is null) return null;
+
+        job.Status = DocumentStatus.Processing;
+        job.AttemptCount++;
+        job.StartedAt = DateTimeOffset.UtcNow;
+        job.UpdatedAt = DateTimeOffset.UtcNow;
+        await _db.SaveChangesAsync(ct);
+        return job.Id;
+    }
+
+    public async Task ProcessJobAsync(Guid jobId, CancellationToken ct)
+    {
+        var job = await _db.DocumentProcessingJobs
+            .Include(j => j.Document).ThenInclude(d => d!.KnowledgeBase)
+            .FirstOrDefaultAsync(j => j.Id == jobId, ct);
+        var document = job?.Document;
+        var kb = document?.KnowledgeBase;
+        if (job is null || document is null || kb is null)
+        {
+            _log.LogWarning("Processing job {JobId} has no document/knowledge base - skipping.", jobId);
+            return;
+        }
+
+        document.Status = DocumentStatus.Processing;
+        document.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
 
         try
         {
-            await _rag.DeleteDocumentAsync(kb.QdrantCollectionName, doc.Id, ct); // drop stale chunks first
+            await _rag.DeleteDocumentAsync(kb.QdrantCollectionName, document.Id, ct); // drop any stale chunks first
             var settings = await _db.UserSettings.FirstOrDefaultAsync(s => s.UserId == kb.OwnerId, ct);
 
-            await using var pdf = await _storage.DownloadAsync(doc.StoragePath, ct);
+            await using var pdf = await _storage.DownloadAsync(document.StoragePath, ct);
             var result = await _rag.IngestAsync(
-                kb.QdrantCollectionName, doc.Id, pdf, doc.FileName,
+                kb.QdrantCollectionName, document.Id, pdf, document.FileName,
                 settings?.ChunkSize ?? 1000, settings?.ChunkOverlap ?? 150, ct);
 
-            kb.ChunkCount = kb.ChunkCount - (doc.ChunkCount ?? 0) + result.Chunks;
-            doc.ChunkCount = result.Chunks;
-            doc.PageCount = result.Pages;
-            doc.Status = DocumentStatus.Completed;
-            doc.ProcessedAt = DateTimeOffset.UtcNow;
-            doc.UpdatedAt = DateTimeOffset.UtcNow;
+            // Counted once, the first time a document is ever successfully processed - not
+            // on every reprocess/retry.
+            var firstSuccess = document.ProcessedAt is null;
+            kb.ChunkCount = kb.ChunkCount - (document.ChunkCount ?? 0) + result.Chunks;
+            if (firstSuccess) kb.DocumentCount++;
             kb.UpdatedAt = DateTimeOffset.UtcNow;
+
+            document.PageCount = result.Pages;
+            document.ChunkCount = result.Chunks;
+            document.Status = DocumentStatus.Completed;
+            document.ProcessedAt = DateTimeOffset.UtcNow;
+            document.UpdatedAt = DateTimeOffset.UtcNow;
+
+            job.Status = DocumentStatus.Completed;
+            job.CompletedAt = DateTimeOffset.UtcNow;
+            job.UpdatedAt = DateTimeOffset.UtcNow;
+
             await _db.SaveChangesAsync(ct);
 
-            await _activity.LogAsync(userId, kb.WorkspaceId, ActivityAction.DocumentProcessed, "Document", doc.Id.ToString(), ct: ct);
-            return Map(doc);
+            if (firstSuccess)
+                await _limits.RecordDocumentUploadedAsync(kb.OwnerId, document.FileSize, ct);
+            await _limits.RecordDocumentChunkedAsync(kb.OwnerId, result.Chunks, ct);
+            await _activity.LogAsync(document.UploadedBy, kb.WorkspaceId, ActivityAction.DocumentProcessed, "Document", document.Id.ToString(), ct: ct);
+            await _notifications.PushAsync(kb.OwnerId, NotificationType.DocReady,
+                "Document indexed", $"\"{document.FileName}\" finished processing ({result.Pages} pages, {result.Chunks} chunks).", ct);
         }
         catch (Exception ex) when (ex is RagException or AppException)
         {
-            doc.Status = DocumentStatus.Failed;
-            doc.ErrorMessage = ex.Message;
-            doc.UpdatedAt = DateTimeOffset.UtcNow;
+            // Only retry genuinely transient failures (RAG service unreachable/timed out, 5xx).
+            // A deterministic rejection (e.g. "scanned PDF, OCR required", 4xx) will never
+            // succeed on retry, so fail it immediately instead of burning attempts + time.
+            var transient = ex is RagException { StatusCode: >= 500 };
+
+            job.ErrorMessage = ex.Message;
+            job.UpdatedAt = DateTimeOffset.UtcNow;
+
+            if (transient && job.AttemptCount < job.MaxAttempts)
+            {
+                job.Status = DocumentStatus.Queued;
+                document.Status = DocumentStatus.Queued;
+                document.UpdatedAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync(ct);
+                return;
+            }
+
+            job.Status = DocumentStatus.Failed;
+            job.CompletedAt = DateTimeOffset.UtcNow;
+            document.Status = DocumentStatus.Failed;
+            document.ErrorMessage = ex.Message;
+            document.UpdatedAt = DateTimeOffset.UtcNow;
             await _db.SaveChangesAsync(ct);
-            await _activity.LogAsync(userId, kb.WorkspaceId, ActivityAction.DocumentFailed, "Document", doc.Id.ToString(), ct: ct);
-            throw;
+
+            await _activity.LogAsync(document.UploadedBy, kb.WorkspaceId, ActivityAction.DocumentFailed, "Document", document.Id.ToString(),
+                new { document.FileName, Reason = ex.Message }, ct);
+            await _notifications.PushAsync(kb.OwnerId, NotificationType.DocFailed,
+                "Document failed to process", $"\"{document.FileName}\": {ex.Message}", ct);
         }
     }
 

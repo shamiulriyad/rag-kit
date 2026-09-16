@@ -42,6 +42,10 @@ public class WorkspacesController : ApiControllerBase
     public async Task<ActionResult> Invite(Guid id, [FromBody] InviteWorkspaceMemberRequest request, CancellationToken ct) =>
         Success(await _workspaces.InviteAsync(id, CurrentUserId, request, ct), "Invitation sent (mocked - no email is delivered yet).");
 
+    [HttpPut("{id:guid}/members/{userId:guid}")]
+    public async Task<ActionResult> UpdateMemberRole(Guid id, Guid userId, [FromBody] UpdateWorkspaceMemberRoleRequest request, CancellationToken ct) =>
+        Success(await _workspaces.UpdateMemberRoleAsync(id, userId, CurrentUserId, request, ct), "Member role updated.");
+
     [HttpDelete("{id:guid}/members/{userId:guid}")]
     public async Task<ActionResult> RemoveMember(Guid id, Guid userId, CancellationToken ct)
     {

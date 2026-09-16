@@ -59,7 +59,7 @@ public class SubscriptionConfiguration : IEntityTypeConfiguration<Subscription>
         b.ToTable("subscriptions");
         b.HasKey(x => x.Id);
         b.HasIndex(x => x.UserId);
-        b.Property(x => x.Status).HasMaxLength(20);
+        b.Property(x => x.Status).HasConversion<string>().HasMaxLength(20);
 
         b.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         b.HasOne(x => x.Plan).WithMany().HasForeignKey(x => x.PlanId).OnDelete(DeleteBehavior.Restrict);

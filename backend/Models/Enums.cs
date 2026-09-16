@@ -9,14 +9,27 @@ public enum MemberRole
     Member,
 }
 
-/// <summary>Lifecycle of an uploaded document as it moves through the Python RAG pipeline.</summary>
+/// <summary>Lifecycle of an uploaded document as it moves through the Python RAG pipeline.
+/// Queued/Processing/Completed/Failed is also reused by <see cref="DocumentProcessingJob"/>
+/// to track individual processing attempts.</summary>
 public enum DocumentStatus
 {
     Uploading,
-    Pending,
+    Queued,
     Processing,
     Completed,
     Failed,
+}
+
+/// <summary>Lifecycle of a <see cref="Subscription"/>. Payment processing is not implemented
+/// yet (see BillingService) - this only tracks state a real payment provider will drive later.</summary>
+public enum SubscriptionStatus
+{
+    Trial,
+    Active,
+    PastDue,
+    Canceled,
+    Expired,
 }
 
 /// <summary>Who authored a chat message.</summary>
@@ -61,4 +74,6 @@ public static class ActivityAction
     public const string QuestionAsked = "QUESTION_ASKED";
     public const string SettingsUpdated = "SETTINGS_UPDATED";
     public const string MemberInvited = "MEMBER_INVITED";
+    public const string MemberRemoved = "MEMBER_REMOVED";
+    public const string PlanChanged = "PLAN_CHANGED";
 }
