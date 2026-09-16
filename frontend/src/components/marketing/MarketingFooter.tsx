@@ -7,19 +7,29 @@ const COLS: { title: string; links: { label: string; to: string; ext?: boolean }
   {
     title: 'Product',
     links: [
-      { label: 'Features', to: '/#features' },
-      { label: 'Pricing', to: '/#pricing' },
+      { label: 'Product overview', to: '/product' },
+      { label: 'Features', to: '/features' },
+      { label: 'How It Works', to: '/how-it-works' },
+      { label: 'Pricing', to: '/pricing' },
       { label: 'Dashboard', to: '/dashboard' },
-      { label: 'Playground', to: '/playground' },
+    ],
+  },
+  {
+    title: 'Developers',
+    links: [
+      { label: 'Developer overview', to: '/developers' },
+      { label: 'Developer Portal', to: '/developer' },
+      { label: 'Documentation', to: '/docs' },
+      { label: 'Getting Started', to: '/docs#getting-started' },
+      { label: 'Architecture', to: '/docs#architecture' },
     ],
   },
   {
     title: 'Resources',
     links: [
-      { label: 'Documentation', to: '/docs' },
-      { label: 'Getting Started', to: '/docs#getting-started' },
-      { label: 'Architecture', to: '/docs#architecture' },
       { label: 'FAQ', to: '/#faq' },
+      { label: 'GitHub', to: '/github' },
+      { label: 'Playground', to: '/playground' },
     ],
   },
   {

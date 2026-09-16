@@ -11,6 +11,10 @@ import { useUI } from '../../lib/ui'
 
 const TITLES: Record<string, { title: string; subtitle: string }> = {
   '/dashboard': { title: 'Dashboard', subtitle: 'Overview of your retrieval workspace' },
+  '/knowledge-bases': {
+    title: 'Knowledge Bases',
+    subtitle: 'Collections of documents your team can ask questions against',
+  },
   '/documents': {
     title: 'Documents',
     subtitle: 'Upload, index and inspect your source PDFs',
@@ -18,6 +22,18 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
   '/chat': {
     title: 'Knowledge Chat',
     subtitle: 'Ask questions grounded in your documents',
+  },
+  '/chat-history': {
+    title: 'Chat History',
+    subtitle: 'Every conversation you have had with your knowledge bases',
+  },
+  '/analytics': {
+    title: 'Analytics',
+    subtitle: 'Usage across questions, documents and knowledge bases',
+  },
+  '/developer': {
+    title: 'Developer Portal',
+    subtitle: 'API keys, documentation and self-hosting resources',
   },
   '/playground': {
     title: 'RAG Playground',

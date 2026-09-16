@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FileText, Play, RotateCcw, Check, Quote } from 'lucide-react'
+import { FileText, Play, RotateCcw, Check, Quote, Database } from 'lucide-react'
 import { LinkButton } from '../ui/Button'
 import { Markdown } from '../../lib/markdown'
 
@@ -57,7 +57,15 @@ export default function LiveDemo() {
       <div className="demo__body">
         <div className="demo__col">
           <div className="demo__block">
-            <h4>1 · Upload</h4>
+            <h4>1 · Create Knowledge Base</h4>
+            <div className="demo__file">
+              <Database size={16} />
+              English Learning
+            </div>
+          </div>
+
+          <div className="demo__block">
+            <h4>2 · Upload</h4>
             <div className="demo__file">
               <FileText size={16} />
               English Grammar.pdf
@@ -65,7 +73,7 @@ export default function LiveDemo() {
           </div>
 
           <div className="demo__block">
-            <h4>2 · Processing</h4>
+            <h4>3 · Processing</h4>
             <div className="demo__steps">
               {STEPS.map((s, i) => {
                 const isDone = done > i
@@ -85,14 +93,14 @@ export default function LiveDemo() {
           </div>
 
           <div className="demo__block">
-            <h4>3 · Ask</h4>
+            <h4>4 · Ask</h4>
             <div className="demo__bubble demo__bubble--user">{QUESTION}</div>
           </div>
         </div>
 
         <div className="demo__col">
           <div className="demo__block">
-            <h4>4 · AI Answer</h4>
+            <h4>5 · AI Answer</h4>
             {showAnswer ? (
               <div className="demo__answer">
                 <Markdown content={ANSWER} />
@@ -107,7 +115,7 @@ export default function LiveDemo() {
           </div>
 
           <div className="demo__block">
-            <h4>5 · Sources</h4>
+            <h4>6 · Sources &amp; page reference</h4>
             {showAnswer ? (
               <div className="sources-grid">
                 {SOURCES.map((s) => (

@@ -18,6 +18,8 @@ import type { LucideIcon } from 'lucide-react'
 import StatCard from '../components/ui/StatCard'
 import StatusPill from '../components/ui/StatusPill'
 import PlanUsageCard from '../components/app/PlanUsageCard'
+import CreateKbModal from '../components/app/CreateKbModal'
+import { useToast } from '../components/ui/Toast'
 import { checkHealth } from '../services/api'
 import {
   mockDocuments,
@@ -40,9 +42,11 @@ const ACTIVITY_ICON: Record<ActivityType, LucideIcon> = {
 
 export default function DashboardPage() {
   const navigate = useNavigate()
+  const toast = useToast()
   const { isKbStarred, toggleKb } = useWorkspace()
-  const { entries } = useActivity()
+  const { entries, log } = useActivity()
   const [apiOnline, setApiOnline] = useState<boolean | null>(null)
+  const [createKbOpen, setCreateKbOpen] = useState(false)
 
   useEffect(() => {
     checkHealth()
@@ -195,6 +199,11 @@ export default function DashboardPage() {
               <strong>Open Playground</strong>
               <span>Experiment with retrieval</span>
             </button>
+            <button className="quick__btn" onClick={() => setCreateKbOpen(true)}>
+              <Database />
+              <strong>Create Knowledge Base</strong>
+              <span>Group documents together</span>
+            </button>
           </div>
         </section>
       </div>
@@ -209,7 +218,12 @@ export default function DashboardPage() {
           </div>
           <div className="list">
             {mockKnowledgeBases.map((kb) => (
-              <div className="list__row" key={kb.id}>
+              <div
+                className="list__row"
+                key={kb.id}
+                style={{ cursor: 'pointer' }}
+                onClick={() => navigate(`/knowledge-bases/${kb.id}`)}
+              >
                 <span className="list__icon">
                   <Database />
                 </span>
@@ -226,7 +240,10 @@ export default function DashboardPage() {
                   className="starbtn"
                   aria-label={isKbStarred(kb.id) ? 'Unstar' : 'Star'}
                   aria-pressed={isKbStarred(kb.id)}
-                  onClick={() => toggleKb(kb.id)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    toggleKb(kb.id)
+                  }}
                 >
                   <Star size={15} fill={isKbStarred(kb.id) ? 'currentColor' : 'none'} />
                 </button>
@@ -263,6 +280,15 @@ export default function DashboardPage() {
           </div>
         </section>
       </div>
+
+      <CreateKbModal
+        open={createKbOpen}
+        onClose={() => setCreateKbOpen(false)}
+        onCreate={(name) => {
+          log('kb_created', `Created the ${name} Knowledge Base`)
+          toast('ok', `Created "${name}". Manage it from Knowledge Bases.`)
+        }}
+      />
     </div>
   )
 }

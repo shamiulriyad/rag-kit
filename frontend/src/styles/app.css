@@ -2079,3 +2079,286 @@ kbd {
   color: var(--text);
   box-shadow: var(--shadow-sm);
 }
+
+/* ============================================================================
+   Knowledge Bases, workspace switcher, chat 3-column layout, analytics, tabs
+   ========================================================================= */
+
+/* Workspace switcher */
+.wsswitch {
+  position: relative;
+  margin-bottom: var(--sp-2);
+}
+.wsswitch__trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.wsswitch__icon {
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.wsswitch__trigger .truncate {
+  flex: 1;
+  text-align: left;
+}
+.wsswitch__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 90;
+  background: var(--card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  padding: var(--sp-2);
+}
+.wsswitch__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+.wsswitch__item:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+.wsswitch__item--add {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+  padding-top: 10px;
+  color: var(--primary);
+}
+
+/* Row-action menus */
+.menu__item--danger {
+  color: var(--danger);
+}
+.menu__item--danger:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Avatars in a stack (Knowledge Base members) */
+.avatar--sm {
+  width: 24px;
+  height: 24px;
+  font-size: 0.66rem;
+}
+.avatar-stack {
+  display: flex;
+}
+.avatar-stack .avatar {
+  margin-left: -8px;
+  border: 2px solid var(--surface);
+}
+.avatar-stack .avatar:first-child {
+  margin-left: 0;
+}
+
+/* Knowledge Base cards */
+.kb-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--sp-4);
+}
+.kb-card {
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.kb-card__head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+.kb-card__head h4 {
+  font-size: 0.96rem;
+  margin: 0;
+}
+.kb-card__stats {
+  display: flex;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+.kb-card__stats > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  color: var(--text-faint);
+}
+.kb-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-3);
+}
+
+/* Tabs (Knowledge Base detail) */
+.tabs {
+  display: flex;
+  gap: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.tabs__btn {
+  padding: 9px 4px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  margin-right: var(--sp-4);
+}
+.tabs__btn:hover {
+  color: var(--text);
+}
+.tabs__btn.is-active {
+  color: var(--text);
+  border-bottom-color: var(--primary);
+}
+
+/* Chat — 3-column layout (Knowledge Base + conversations / chat / sources) */
+.chatlayout {
+  display: grid;
+  grid-template-columns: 240px 1fr 280px;
+  height: calc(100vh - var(--topbar-h));
+}
+.chatlayout__side,
+.chatlayout__sources {
+  padding: var(--sp-4);
+  overflow-y: auto;
+}
+.chatlayout__side {
+  border-right: 1px solid var(--border);
+}
+.chatlayout__sources {
+  border-left: 1px solid var(--border);
+}
+.chatlayout__side-head {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-faint);
+  font-weight: 700;
+  margin-bottom: var(--sp-2);
+}
+.chatlayout .chat {
+  height: 100%;
+}
+.convlist {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--sp-2);
+}
+.convlist__item {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  width: 100%;
+  padding: 8px 8px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+.convlist__item:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+.convlist__item.is-active {
+  background: var(--primary-soft);
+  color: var(--on-primary-soft);
+}
+.convlist__item .list__meta {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+@media (max-width: 1100px) {
+  .chatlayout {
+    grid-template-columns: 220px 1fr;
+  }
+  .chatlayout__sources {
+    display: none;
+  }
+}
+@media (max-width: 780px) {
+  .chatlayout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+  .chatlayout__side {
+    display: none;
+  }
+}
+
+/* Analytics — dependency-free bar chart */
+.barchart {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-3);
+  padding-top: var(--sp-4);
+}
+.barchart__col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+}
+.barchart__value {
+  font-size: 0.74rem;
+  color: var(--text-faint);
+}
+.barchart__track {
+  flex: 1;
+  width: 100%;
+  max-width: 36px;
+  display: flex;
+  align-items: flex-end;
+  background: var(--surface);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+}
+.barchart__bar {
+  width: 100%;
+  background: linear-gradient(180deg, var(--accent), var(--primary));
+  border-radius: var(--r-sm) var(--r-sm) 0 0;
+  transition: height var(--dur) var(--ease);
+}
+.barchart__label {
+  font-size: 0.74rem;
+  color: var(--text-faint);
+}

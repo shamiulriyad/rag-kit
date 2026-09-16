@@ -1,56 +1,67 @@
 import { NavLink } from 'react-router-dom'
 import {
   LayoutDashboard,
+  Database,
   FileText,
   MessagesSquare,
+  History,
+  BarChart3,
+  Users,
+  Activity,
+  Settings,
   FlaskConical,
   SquareTerminal,
   CreditCard,
-  Users,
-  History,
-  Settings,
   BookOpen,
+  LifeBuoy,
   LogOut,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import Logo from '../ui/Logo'
 import { GithubIcon } from '../ui/icons'
+import WorkspaceSwitcher from './WorkspaceSwitcher'
 import FavoritesNav from './FavoritesNav'
 import { useAuth } from '../../lib/auth'
 import { initials } from '../../lib/format'
 
-const NAV: { section: string; items: { to: string; label: string; icon: LucideIcon }[] }[] = [
-  {
-    section: 'Workspace',
-    items: [
-      { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { to: '/documents', label: 'Documents', icon: FileText },
-      { to: '/chat', label: 'Knowledge Chat', icon: MessagesSquare },
-    ],
-  },
-  {
-    section: 'Build',
-    items: [
-      { to: '/playground', label: 'RAG Playground', icon: FlaskConical },
-      { to: '/prompt-playground', label: 'Prompt Playground', icon: SquareTerminal },
-    ],
-  },
-  {
-    section: 'Account',
-    items: [
-      { to: '/billing', label: 'Billing & Usage', icon: CreditCard },
-      { to: '/team', label: 'Team', icon: Users },
-      { to: '/activity', label: 'Activity', icon: History },
-    ],
-  },
-  {
-    section: 'Configure',
-    items: [
-      { to: '/settings', label: 'Settings', icon: Settings },
-      { to: '/docs', label: 'Documentation', icon: BookOpen },
-    ],
-  },
+const PRIMARY_NAV: { to: string; label: string; icon: LucideIcon }[] = [
+  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/knowledge-bases', label: 'Knowledge Bases', icon: Database },
+  { to: '/documents', label: 'Documents', icon: FileText },
+  { to: '/chat', label: 'Knowledge Chat', icon: MessagesSquare },
+  { to: '/chat-history', label: 'Chat History', icon: History },
+  { to: '/analytics', label: 'Analytics', icon: BarChart3 },
+  { to: '/team', label: 'Team', icon: Users },
+  { to: '/activity', label: 'Activity', icon: Activity },
+  { to: '/settings', label: 'Settings', icon: Settings },
 ]
+
+// Existing tools that predate this nav's spec — kept reachable, not deleted.
+const MORE_NAV: { to: string; label: string; icon: LucideIcon }[] = [
+  { to: '/playground', label: 'RAG Playground', icon: FlaskConical },
+  { to: '/prompt-playground', label: 'Prompt Playground', icon: SquareTerminal },
+  { to: '/billing', label: 'Billing & Usage', icon: CreditCard },
+  { to: '/developer', label: 'Developer Portal', icon: SquareTerminal },
+  { to: '/docs', label: 'Documentation', icon: BookOpen },
+]
+
+function NavItems({ items, onNavigate }: { items: typeof PRIMARY_NAV; onNavigate: () => void }) {
+  return (
+    <>
+      {items.map((item) => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          onClick={onNavigate}
+          className={({ isActive }) => `navlink${isActive ? ' navlink--active' : ''}`}
+        >
+          <item.icon />
+          {item.label}
+        </NavLink>
+      ))}
+    </>
+  )
+}
 
 export default function Sidebar({
   open,
@@ -67,24 +78,16 @@ export default function Sidebar({
         <Logo to="/dashboard" />
       </div>
 
-      {NAV.map((group) => (
-        <div key={group.section}>
-          <div className="sidebar__section">{group.section}</div>
-          {group.items.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              onClick={onNavigate}
-              className={({ isActive }) =>
-                `navlink${isActive ? ' navlink--active' : ''}`
-              }
-            >
-              <item.icon />
-              {item.label}
-            </NavLink>
-          ))}
-        </div>
-      ))}
+      <WorkspaceSwitcher />
+
+      <div>
+        <NavItems items={PRIMARY_NAV} onNavigate={onNavigate} />
+      </div>
+
+      <div>
+        <div className="sidebar__section">More</div>
+        <NavItems items={MORE_NAV} onNavigate={onNavigate} />
+      </div>
 
       <FavoritesNav />
 
@@ -98,17 +101,21 @@ export default function Sidebar({
           <GithubIcon />
           GitHub Repo
         </a>
+        <a className="navlink" href="mailto:support@ragstarter.dev">
+          <LifeBuoy />
+          Help &amp; Support
+        </a>
         <button className="navlink" onClick={signOut} style={{ width: '100%' }}>
           <LogOut />
           Sign Out
         </button>
-        <div className="sidebar__user">
+        <NavLink to="/settings" className="sidebar__user" onClick={onNavigate}>
           <span className="avatar">{initials(user?.name ?? 'U')}</span>
           <div>
             <strong>{user?.name}</strong>
             <span>{user?.email}</span>
           </div>
-        </div>
+        </NavLink>
       </div>
     </aside>
   )

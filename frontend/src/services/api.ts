@@ -26,13 +26,34 @@ export interface Health {
   rag: string
 }
 
+// Thrown for any non-OK HTTP response so callers can branch on `status`
+// instead of parsing the message string.
+export class ApiError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
+const STATUS_FALLBACK: Record<number, string> = {
+  401: 'Your session has expired. Please sign in again.',
+  403: "You don't have permission to do that.",
+  404: "That couldn't be found. It may have been moved or deleted.",
+  409: 'That already exists or conflicts with something else.',
+  422: 'Some of the information provided is invalid.',
+  429: "You're sending requests too quickly. Please wait a moment and try again.",
+  500: 'Something went wrong on the server. Please try again shortly.',
+}
+
 async function readError(res: Response): Promise<string> {
   try {
     const body = await res.json()
     // Backend sends { message }; FastAPI sends { detail }; older code used { error }.
-    return body.message ?? body.detail ?? body.error ?? res.statusText
+    return body.message ?? body.detail ?? body.error ?? STATUS_FALLBACK[res.status] ?? res.statusText
   } catch {
-    return res.statusText || `HTTP ${res.status}`
+    return STATUS_FALLBACK[res.status] ?? res.statusText ?? `HTTP ${res.status}`
   }
 }
 
@@ -47,7 +68,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       `Could not reach the backend at ${BASE_URL}. Is it running? (cd backend && dotnet run)`,
     )
   }
-  if (!res.ok) throw new Error(await readError(res))
+  if (!res.ok) throw new ApiError(res.status, await readError(res))
   return res.json() as Promise<T>
 }
 

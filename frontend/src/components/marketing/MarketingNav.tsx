@@ -6,10 +6,11 @@ import { GithubIcon } from '../ui/icons'
 import { LinkButton } from '../ui/Button'
 
 const LINKS = [
-  { label: 'Product', to: '/#demo' },
-  { label: 'Features', to: '/#features' },
-  { label: 'How It Works', to: '/#solution' },
-  { label: 'Pricing', to: '/#pricing' },
+  { label: 'Product', to: '/product' },
+  { label: 'Developers', to: '/developers' },
+  { label: 'Features', to: '/features' },
+  { label: 'How It Works', to: '/how-it-works' },
+  { label: 'Pricing', to: '/pricing' },
   { label: 'Documentation', to: '/docs' },
 ]
 

@@ -10,6 +10,8 @@ export interface KnowledgeBase {
   description: string
   documents: number
   chunks: number
+  questions: number
+  members: string[]
   updatedAt: string
 }
 
@@ -20,6 +22,8 @@ export const mockKnowledgeBases: KnowledgeBase[] = [
     description: 'Grammar references and study material for ESL learners.',
     documents: 2,
     chunks: 1401,
+    questions: 128,
+    members: ['You', 'Priya Nair'],
     updatedAt: '2026-09-11T09:40:00Z',
   },
   {
@@ -28,6 +32,8 @@ export const mockKnowledgeBases: KnowledgeBase[] = [
     description: 'Internal architecture specs and engineering runbooks.',
     documents: 1,
     chunks: 214,
+    questions: 42,
+    members: ['You', 'Priya Nair', 'Tom Fletcher'],
     updatedAt: '2026-09-10T15:12:00Z',
   },
   {
@@ -36,6 +42,8 @@ export const mockKnowledgeBases: KnowledgeBase[] = [
     description: 'Papers and surveys on retrieval-augmented generation.',
     documents: 1,
     chunks: 133,
+    questions: 19,
+    members: ['You'],
     updatedAt: '2026-09-08T18:02:00Z',
   },
 ]
@@ -43,8 +51,10 @@ export const mockKnowledgeBases: KnowledgeBase[] = [
 export interface Conversation {
   id: string
   title: string
+  knowledgeBaseId: string
   knowledgeBase: string
   messages: number
+  createdAt: string
   updatedAt: string
 }
 
@@ -52,22 +62,28 @@ export const mockConversations: Conversation[] = [
   {
     id: 'cv_present_perfect',
     title: 'Present perfect vs past simple',
+    knowledgeBaseId: 'kb_english',
     knowledgeBase: 'English Learning',
     messages: 6,
+    createdAt: '2026-09-11T10:10:00Z',
     updatedAt: '2026-09-11T10:24:00Z',
   },
   {
     id: 'cv_frontend_python',
     title: 'How does the frontend reach the Python service?',
+    knowledgeBaseId: 'kb_platform',
     knowledgeBase: 'Platform Docs',
     messages: 4,
+    createdAt: '2026-09-11T09:05:00Z',
     updatedAt: '2026-09-11T09:18:00Z',
   },
   {
     id: 'cv_chunk_overlap',
     title: 'Recommended chunk overlap for long documents',
+    knowledgeBaseId: 'kb_research',
     knowledgeBase: 'RAG Research',
     messages: 8,
+    createdAt: '2026-09-10T18:20:00Z',
     updatedAt: '2026-09-10T18:44:00Z',
   },
 ]
@@ -285,7 +301,7 @@ export function buildSearchIndex(): SearchDoc[] {
     category: 'Knowledge Bases',
     title: k.name,
     subtitle: `${k.documents} docs · ${k.chunks.toLocaleString()} chunks`,
-    to: '/dashboard',
+    to: `/knowledge-bases/${k.id}`,
   }))
   const docs: SearchDoc[] = mockDocuments.map((d) => ({
     id: d.id,
@@ -299,7 +315,7 @@ export function buildSearchIndex(): SearchDoc[] {
     category: 'Conversations',
     title: c.title,
     subtitle: `${c.knowledgeBase} · ${c.messages} messages`,
-    to: '/chat',
+    to: `/chat?conversation=${c.id}`,
   }))
   const sources: SearchDoc[] = mockSources.map((s) => ({
     id: s.id,

@@ -12,6 +12,7 @@ export interface DocRecord {
   chunks: number
   status: DocStatus
   uploadedAt: string
+  knowledgeBaseId: string
   note?: string
 }
 
@@ -26,6 +27,7 @@ export const mockDocuments: DocRecord[] = [
     chunks: 1187,
     status: 'ready',
     uploadedAt: '2026-09-09T14:12:00Z',
+    knowledgeBaseId: 'kb_english',
   },
   {
     id: 'doc_platform_spec',
@@ -35,6 +37,7 @@ export const mockDocuments: DocRecord[] = [
     chunks: 214,
     status: 'ready',
     uploadedAt: '2026-09-10T09:41:00Z',
+    knowledgeBaseId: 'kb_platform',
   },
   {
     id: 'doc_scanned',
@@ -44,6 +47,7 @@ export const mockDocuments: DocRecord[] = [
     chunks: 0,
     status: 'failed',
     uploadedAt: '2026-09-10T19:03:00Z',
+    knowledgeBaseId: 'kb_platform',
     note: 'This PDF appears to be scanned / image-based. OCR is required before indexing.',
   },
 ]

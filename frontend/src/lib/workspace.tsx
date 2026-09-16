@@ -16,12 +16,24 @@ interface PinnedConversation {
   title: string
 }
 
+export interface Workspace {
+  id: string
+  name: string
+}
+
+const DEFAULT_WORKSPACES: Workspace[] = [
+  { id: 'ws_personal', name: 'Personal' },
+  { id: 'ws_team', name: 'RAG Starter Team' },
+]
+
 interface WorkspaceState {
   starredKbs: string[]
   favoriteDocs: string[]
   pinnedConversations: PinnedConversation[]
   tagsByDoc: Record<string, string[]>
   customTags: string[]
+  workspaces: Workspace[]
+  currentWorkspaceId: string
 }
 
 const EMPTY: WorkspaceState = {
@@ -35,10 +47,13 @@ const EMPTY: WorkspaceState = {
     doc_platform_spec: ['Programming'],
   },
   customTags: [],
+  workspaces: DEFAULT_WORKSPACES,
+  currentWorkspaceId: 'ws_personal',
 }
 
 interface WorkspaceValue extends WorkspaceState {
   allTags: string[]
+  currentWorkspace: Workspace
   toggleKb: (id: string) => void
   toggleDoc: (id: string) => void
   togglePin: (c: PinnedConversation) => void
@@ -48,6 +63,9 @@ interface WorkspaceValue extends WorkspaceState {
   addTagToDoc: (docId: string, tag: string) => void
   removeTagFromDoc: (docId: string, tag: string) => void
   createTag: (tag: string) => void
+  switchWorkspace: (id: string) => void
+  createWorkspace: (name: string) => void
+  renameWorkspace: (id: string, name: string) => void
 }
 
 const WorkspaceContext = createContext<WorkspaceValue | null>(null)
@@ -118,11 +136,39 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [setState],
   )
 
+  const switchWorkspace = useCallback(
+    (id: string) => setState((s) => ({ ...s, currentWorkspaceId: id })),
+    [setState],
+  )
+  const createWorkspace = useCallback(
+    (name: string) =>
+      setState((s) => {
+        const id = `ws_${Date.now()}`
+        return {
+          ...s,
+          workspaces: [...s.workspaces, { id, name }],
+          currentWorkspaceId: id,
+        }
+      }),
+    [setState],
+  )
+  const renameWorkspace = useCallback(
+    (id: string, name: string) =>
+      setState((s) => ({
+        ...s,
+        workspaces: s.workspaces.map((w) => (w.id === id ? { ...w, name } : w)),
+      })),
+    [setState],
+  )
+
   const value = useMemo<WorkspaceValue>(() => {
     const allTags = [...DEFAULT_TAGS, ...state.customTags]
+    const currentWorkspace =
+      state.workspaces.find((w) => w.id === state.currentWorkspaceId) ?? state.workspaces[0]
     return {
       ...state,
       allTags,
+      currentWorkspace,
       toggleKb,
       toggleDoc,
       togglePin,
@@ -132,8 +178,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       addTagToDoc,
       removeTagFromDoc,
       createTag,
+      switchWorkspace,
+      createWorkspace,
+      renameWorkspace,
     }
-  }, [state, toggleKb, toggleDoc, togglePin, addTagToDoc, removeTagFromDoc, createTag])
+  }, [
+    state,
+    toggleKb,
+    toggleDoc,
+    togglePin,
+    addTagToDoc,
+    removeTagFromDoc,
+    createTag,
+    switchWorkspace,
+    createWorkspace,
+    renameWorkspace,
+  ])
 
   return (
     <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>

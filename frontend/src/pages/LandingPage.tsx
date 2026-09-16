@@ -1,38 +1,35 @@
-import { Fragment, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import {
   ArrowRight,
-  ArrowDown,
-  Boxes,
-  FileUp,
   FileText,
   Binary,
   Database,
   Sparkles,
-  Quote,
+  Search,
+  ScanSearch,
+  Sparkle,
   Cpu,
-  SlidersHorizontal,
   Layers3,
   ShieldCheck,
-  Code2,
   GitBranch,
   BookOpen,
   Eye,
-  ScrollText,
-  Scissors,
-  Server,
-  Search,
-  MonitorSmartphone,
-  Settings2,
-  Rocket,
+  SlidersHorizontal,
   GraduationCap,
-  Briefcase,
+  Users,
   Building2,
+  Briefcase,
+  Rocket,
 } from 'lucide-react'
 import MarketingNav from '../components/marketing/MarketingNav'
 import MarketingFooter from '../components/marketing/MarketingFooter'
 import PricingPlans from '../components/marketing/PricingPlans'
 import LiveDemo from '../components/marketing/LiveDemo'
 import VideoEmbed from '../components/marketing/VideoEmbed'
+import FeatureGrid from '../components/marketing/FeatureGrid'
+import ArchitectureDiagram from '../components/marketing/ArchitectureDiagram'
+import HowItWorksTracks from '../components/marketing/HowItWorksTracks'
+import Faq from '../components/marketing/Faq'
 import Badge from '../components/ui/Badge'
 import { LinkButton } from '../components/ui/Button'
 import { GithubIcon } from '../components/ui/icons'
@@ -40,132 +37,54 @@ import { GithubIcon } from '../components/ui/icons'
 const GITHUB_URL = 'https://github.com/shamiulriyad/rag-kit'
 
 const PAIN = [
-  { label: 'PDF Processing', icon: FileText },
-  { label: 'Chunking', icon: Scissors },
-  { label: 'Embeddings', icon: Binary },
-  { label: 'Vector Database', icon: Database },
-  { label: 'Retrieval', icon: Search },
-  { label: 'LLM Integration', icon: Sparkles },
-  { label: 'Backend API', icon: Server },
-  { label: 'Frontend', icon: MonitorSmartphone },
-  { label: 'Configuration', icon: Settings2 },
+  { label: 'PDFs & manuals', icon: FileText },
+  { label: 'Course materials', icon: BookOpen },
+  { label: 'Research papers', icon: ScanSearch },
+  { label: 'Company policies', icon: ShieldCheck },
+  { label: 'Documentation', icon: Binary },
+  { label: 'Internal knowledge', icon: Database },
 ]
 
-const STEPS = [
-  { n: '01', title: 'Clone', body: 'Pull the repository and open it in your editor.' },
-  { n: '02', title: 'Configure', body: 'Set your Gemini key, models and Qdrant URL in .env.' },
-  { n: '03', title: 'Add Documents', body: 'Drop PDFs into the UI or run the CLI ingester.' },
-  { n: '04', title: 'Index', body: 'Text is extracted, chunked, embedded and stored in Qdrant.' },
-  { n: '05', title: 'Ask Questions', body: 'Query your knowledge base and get answers with sources.' },
+const CUSTOMER_SOLUTION_STEPS = [
+  { n: '01', title: 'Upload', body: 'Add your documents to a knowledge base.' },
+  { n: '02', title: 'Process', body: 'Text is extracted, cleaned and chunked automatically.' },
+  { n: '03', title: 'Index', body: 'Chunks are embedded and stored for retrieval.' },
+  { n: '04', title: 'Ask', body: 'Ask a question in plain language.' },
+  { n: '05', title: 'Get grounded answer', body: 'Receive an answer with citations back to your documents.' },
 ]
 
-const FEATURES = [
-  {
-    icon: Boxes,
-    title: 'Modular Pipeline',
-    body: 'Separate ingestion, embedding, retrieval and generation components.',
-  },
-  {
-    icon: FileUp,
-    title: 'Document Ingestion',
-    body: 'Turn PDFs into searchable knowledge.',
-  },
-  {
-    icon: Database,
-    title: 'Vector Search',
-    body: 'Store and retrieve relevant document chunks using Qdrant.',
-  },
-  {
-    icon: Quote,
-    title: 'Source-Aware Answers',
-    body: 'Show users where answers came from.',
-  },
-  {
-    icon: SlidersHorizontal,
-    title: 'Bring Your Own Models',
-    body: 'Keep LLM and embedding configuration flexible.',
-  },
-  {
-    icon: Code2,
-    title: 'Developer Friendly',
-    body: 'React + ASP.NET Core + Python architecture.',
-  },
-  {
-    icon: Settings2,
-    title: 'Configurable',
-    body: 'Control chunking, retrieval and model settings.',
-  },
-  {
-    icon: GitBranch,
-    title: 'Open Source',
-    body: 'Understand, modify and extend the foundation.',
-  },
+const CUSTOMER_PERSONAS = [
+  { icon: GraduationCap, title: 'Students', body: 'Ask questions across your course materials instead of re-reading everything.' },
+  { icon: Users, title: 'Teachers', body: 'Turn your teaching materials into an assistant students can query.' },
+  { icon: Sparkle, title: 'Course creators', body: 'Let learners ask your content questions and get grounded answers.' },
+  { icon: Briefcase, title: 'Small teams', body: 'Give the whole team a shared, searchable knowledge workspace.' },
+  { icon: Building2, title: 'Businesses', body: 'Build an internal assistant over policies, docs and manuals.' },
+  { icon: Search, title: 'Research teams', body: 'Search and understand large collections of papers and reports.' },
 ]
 
-const ARCH_LAYERS = [
-  {
-    name: 'React',
-    body: 'The UI. Talks only to the .NET API over HTTP/JSON.',
-  },
-  {
-    name: 'ASP.NET Core API',
-    body: 'The gateway. Validates uploads, enforces limits, forwards requests.',
-  },
-  {
-    name: 'Python RAG Engine',
-    body: 'Extraction, cleaning, chunking, embedding, retrieval and prompt assembly.',
-  },
-]
-
-const PERSONAS = [
-  {
-    icon: Cpu,
-    title: 'AI/ML Developers',
-    body: 'Skip the plumbing and iterate on retrieval quality and prompts.',
-  },
-  {
-    icon: Layers3,
-    title: 'Full-Stack Developers',
-    body: 'A typed React + .NET + Python stack you can read end to end.',
-  },
-  {
-    icon: Rocket,
-    title: 'Hackathon Builders',
-    body: 'Go from clone to a working Q&A demo in an afternoon.',
-  },
-  {
-    icon: Briefcase,
-    title: 'Freelancers',
-    body: 'A reusable foundation to deliver document-Q&A projects faster.',
-  },
-  {
-    icon: GraduationCap,
-    title: 'Students & Researchers',
-    body: 'A clear reference implementation of a full RAG pipeline.',
-  },
-  {
-    icon: Building2,
-    title: 'Startups & Small Teams',
-    body: 'Own the stack instead of renting a black-box RAG API.',
-  },
+const DEVELOPER_PERSONAS = [
+  { icon: Cpu, title: 'AI/ML Developers', body: 'Skip the plumbing and iterate on retrieval quality and prompts.' },
+  { icon: Layers3, title: 'Full-Stack Developers', body: 'A typed React + .NET + Python stack you can read end to end.' },
+  { icon: Rocket, title: 'Hackathon Builders', body: 'Go from clone to a working Q&A demo in an afternoon.' },
+  { icon: GraduationCap, title: 'Researchers', body: 'A clear reference implementation of a full RAG pipeline.' },
+  { icon: Building2, title: 'Startups & Small Teams', body: 'Own the stack instead of renting a black-box RAG API.' },
 ]
 
 const USE_CASES = [
-  { emoji: '📚', label: 'AI Study Assistant' },
-  { emoji: '📄', label: 'Research Paper Assistant' },
-  { emoji: '🏢', label: 'Internal Knowledge Base' },
-  { emoji: '🎓', label: 'Educational RAG' },
-  { emoji: '💻', label: 'Developer Documentation Assistant' },
-  { emoji: '📖', label: 'Document Q&A' },
+  { emoji: '🎓', label: 'Education', body: 'Ask questions across course materials.' },
+  { emoji: '🔬', label: 'Research', body: 'Search and understand research documents.' },
+  { emoji: '🏢', label: 'Business', body: 'Create an internal company knowledge assistant.' },
+  { emoji: '📄', label: 'Documentation', body: 'Ask questions across technical documentation.' },
+  { emoji: '🧠', label: 'Personal Knowledge', body: 'Build an AI workspace around your own documents.' },
 ]
 
 const TRUST = [
-  { icon: GitBranch, label: 'Open Source' },
-  { icon: Eye, label: 'Open to inspection' },
-  { icon: BookOpen, label: 'Documented' },
-  { icon: Boxes, label: 'Modular architecture' },
-  { icon: Code2, label: 'Developer-focused' },
-  { icon: SlidersHorizontal, label: 'Transparent configuration' },
+  { icon: GitBranch, label: 'Open-source foundation' },
+  { icon: Eye, label: 'Transparent architecture' },
+  { icon: Sparkles, label: 'Source citations' },
+  { icon: ShieldCheck, label: 'Secure workspace isolation' },
+  { icon: BookOpen, label: 'Developer documentation' },
+  { icon: SlidersHorizontal, label: 'No vendor lock-in on the self-hosted version' },
 ]
 
 const TECHS = [
@@ -174,45 +93,6 @@ const TECHS = [
   { name: 'Python', icon: Cpu },
   { name: 'Qdrant', icon: Database },
   { name: 'Gemini', icon: Sparkles },
-]
-
-const FAQ = [
-  {
-    q: 'What is RAG Starter?',
-    a: 'An open-source starter for building retrieval-augmented generation apps: document ingestion, embeddings, vector search with Qdrant, retrieval, and grounded answers from an LLM — wired together across a React frontend, an ASP.NET Core API and a Python engine.',
-  },
-  {
-    q: 'Do I need to know RAG to use it?',
-    a: 'No. The pipeline works out of the box with sensible defaults. Understanding chunking, embeddings and retrieval helps you tune it, and the documentation walks through each stage.',
-  },
-  {
-    q: 'Can I use my own documents?',
-    a: 'Yes. Upload PDFs from the Documents page or run the CLI ingester. Text-based PDFs work directly; scanned PDFs need OCR first and the app tells you when that is the case.',
-  },
-  {
-    q: 'Which LLMs are supported?',
-    a: 'Google Gemini is wired in by default. The LLM layer is configurable through .env, so an OpenAI-compatible or self-hosted model can be swapped in.',
-  },
-  {
-    q: 'What is Qdrant?',
-    a: 'An open-source vector database. RAG Starter runs it as a standalone server via Docker Compose and stores document chunk embeddings in it for similarity search.',
-  },
-  {
-    q: 'Can I customize the embedding model?',
-    a: 'Yes. Set EMBEDDING_MODEL in .env. The default is multilingual (BAAI/bge-m3) so mixed-language documents work; changing it means re-indexing.',
-  },
-  {
-    q: 'Is the Free plan really free?',
-    a: 'Yes — $0, no card. Plans here are a frontend demo for now: they gate limits in the UI but there is no billing backend yet.',
-  },
-  {
-    q: 'Can I use it for my own projects?',
-    a: 'Yes. It is MIT-licensed. Clone it, change it, ship it as the foundation of your own product.',
-  },
-  {
-    q: 'Is authentication / payment available yet?',
-    a: 'Not yet. Authentication is frontend-only (mock, localStorage) and there is no payment processing or billing backend. The UI is built so a real backend can drop in later without a rewrite.',
-  },
 ]
 
 function Section({
@@ -247,30 +127,28 @@ export default function LandingPage() {
     <div className="marketing">
       <MarketingNav />
 
-      {/* 2. Hero */}
+      {/* Hero */}
       <section className="hero">
         <div className="container hero__inner">
           <div>
             <Badge tone="primary" dot>
-              Open-source RAG starter for developers
+              AI Knowledge Platform
             </Badge>
             <h1 className="hero__title">
-              Build RAG Systems.{' '}
-              <span className="grad">Without Starting From Zero.</span>
+              Turn Your Documents Into an{' '}
+              <span className="grad">AI Knowledge Workspace.</span>
             </h1>
             <p className="hero__sub">
-              RAG Starter gives you the foundation for document ingestion,
-              embeddings, vector search, retrieval, and LLM integration — so you
-              can focus on your product.
+              Upload your documents, ask questions, and get reliable answers grounded in your
+              own knowledge.
             </p>
             <div className="hero__ctas">
               <LinkButton size="lg" to="/signup">
                 Start Free
                 <ArrowRight size={16} />
               </LinkButton>
-              <LinkButton variant="secondary" size="lg" href={GITHUB_URL}>
-                <GithubIcon size={16} />
-                View on GitHub
+              <LinkButton variant="secondary" size="lg" to="/developers">
+                Explore for Developers
               </LinkButton>
             </div>
             <p className="muted" style={{ fontSize: '0.85rem', marginTop: 'var(--sp-4)' }}>
@@ -288,12 +166,12 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* 3. Problem */}
+      {/* Problem */}
       <Section
         id="problem"
         eyebrow="The Problem"
-        title="Building RAG shouldn't mean rebuilding everything."
-        lead="Every RAG project drags the same infrastructure behind it before you write a line of product code."
+        title="Your knowledge is trapped in documents."
+        lead="PDFs, course materials, manuals, documentation, research papers and company policies pile up. Searching manually is slow, and generic AI doesn't automatically know your private documents."
       >
         <div className="prob__grid">
           {PAIN.map((p) => (
@@ -305,22 +183,18 @@ export default function LandingPage() {
         </div>
         <div className="prob__solve">
           <Sparkles />
-          <p>
-            RAG Starter gives you the foundation so you can focus on building your
-            actual product.
-          </p>
+          <p>RAG Starter turns that pile of documents into a workspace you can ask questions of.</p>
         </div>
       </Section>
 
-      {/* 4. Solution */}
+      {/* Solution */}
       <Section
         id="solution"
         eyebrow="The Solution"
-        title="From idea to working RAG foundation in minutes."
-        lead="Five steps. No architecture decisions to agonise over."
+        title="Your documents. Your knowledge. Your AI."
       >
         <div className="steps">
-          {STEPS.map((s) => (
+          {CUSTOMER_SOLUTION_STEPS.map((s) => (
             <div className="step" key={s.n}>
               <span className="step__num">{s.n}</span>
               <h3>{s.title}</h3>
@@ -330,88 +204,39 @@ export default function LandingPage() {
         </div>
       </Section>
 
-      {/* 5. Live demo */}
+      {/* Product demo */}
       <Section
         id="demo"
-        eyebrow="Live Demo"
+        eyebrow="Product Demo"
         title="See it work, end to end."
-        lead="Upload a document, watch it get indexed, then ask a question and get a grounded answer with sources — all mocked, right here."
+        lead="Create a knowledge base, upload a document, watch it get processed, then ask a question and get a grounded answer with sources — all mocked, right here."
       >
         <LiveDemo />
       </Section>
 
-      {/* 6. Features */}
+      {/* How it works — two tracks, kept visually separate */}
       <Section
-        id="features"
-        eyebrow="Features"
-        title="Everything you need to start building RAG"
+        id="how-it-works"
+        eyebrow="How It Works"
+        title="Two workflows. One platform."
+        lead="Use the hosted product as a customer, or self-host the same architecture as a developer."
       >
-        <div className="features__grid">
-          {FEATURES.map((f) => (
-            <article className="card card--interactive feature" key={f.title}>
-              <span className="feature__icon">
-                <f.icon />
-              </span>
-              <h3>{f.title}</h3>
-              <p>{f.body}</p>
-            </article>
-          ))}
-        </div>
+        <HowItWorksTracks />
       </Section>
 
-      {/* 7. Architecture */}
-      <Section
-        id="architecture"
-        eyebrow="Architecture"
-        title="Built for developers. Designed to stay flexible."
-        lead="One request path, each layer with a single responsibility."
-      >
-        <div className="arch__stack">
-          {ARCH_LAYERS.map((l, i) => (
-            <Fragment key={l.name}>
-              <div className="arch__layer">
-                <h3>{l.name}</h3>
-                <p>{l.body}</p>
-              </div>
-              {i < ARCH_LAYERS.length - 1 && (
-                <span className="arch__down" aria-hidden>
-                  <ArrowDown size={16} />
-                </span>
-              )}
-            </Fragment>
-          ))}
-          <span className="arch__down" aria-hidden>
-            <ArrowDown size={16} />
-          </span>
-          <div className="arch__branch">
-            <div className="arch__layer">
-              <h3>Qdrant</h3>
-              <p>Vector store (server mode) holding the chunk embeddings.</p>
-            </div>
-            <div className="arch__layer">
-              <h3>Gemini</h3>
-              <p>Generates the final answer from the retrieved context.</p>
-            </div>
-          </div>
-        </div>
-        <div className="arch__note" style={{ marginTop: 'var(--sp-6)' }}>
-          <ScrollText />
-          <span>
-            Use the architecture as a starting point. Customize it for your own
-            application — the React frontend talks only to the .NET API, never to
-            Python directly.
-          </span>
-        </div>
+      {/* Features */}
+      <Section id="features" eyebrow="Features" title="Everything you need to work with your knowledge">
+        <FeatureGrid />
       </Section>
 
-      {/* 8. Who is it for */}
-      <Section
-        id="who"
-        eyebrow="Who It's For"
-        title="Built for developers who don't want to reinvent the RAG stack."
-      >
+      {/* Who is it for */}
+      <Section id="who" eyebrow="Who It's For" title="Built for two kinds of people.">
+        <div className="section-head" style={{ marginBottom: 'var(--sp-5)' }}>
+          <h3 style={{ margin: 0 }}>For Customers</h3>
+          <p className="muted" style={{ margin: 0 }}>Use AI without building the infrastructure.</p>
+        </div>
         <div className="persona-grid">
-          {PERSONAS.map((p) => (
+          {CUSTOMER_PERSONAS.map((p) => (
             <article className="persona" key={p.title}>
               <span className="persona__icon">
                 <p.icon />
@@ -421,94 +246,81 @@ export default function LandingPage() {
             </article>
           ))}
         </div>
+        <div style={{ textAlign: 'center', marginTop: 'var(--sp-5)' }}>
+          <LinkButton to="/signup">Start Using It</LinkButton>
+        </div>
+
+        <div className="section-head" style={{ margin: 'var(--sp-8) 0 var(--sp-5)' }}>
+          <h3 style={{ margin: 0 }}>For Developers</h3>
+          <p className="muted" style={{ margin: 0 }}>Build your own RAG system without starting from zero.</p>
+        </div>
+        <div className="persona-grid">
+          {DEVELOPER_PERSONAS.map((p) => (
+            <article className="persona" key={p.title}>
+              <span className="persona__icon">
+                <p.icon />
+              </span>
+              <h3>{p.title}</h3>
+              <p>{p.body}</p>
+            </article>
+          ))}
+        </div>
+        <div style={{ textAlign: 'center', marginTop: 'var(--sp-5)' }}>
+          <LinkButton variant="secondary" to="/developers">
+            Explore Developer Tools
+          </LinkButton>
+        </div>
       </Section>
 
-      {/* 9. Use cases */}
+      {/* Use cases */}
       <Section
         id="use-cases"
         eyebrow="Use Cases"
-        title="What people build with a RAG foundation"
-        lead="Examples of what the pipeline is well suited to — starting points, not prebuilt products."
+        title="What people build with a knowledge workspace"
       >
         <div className="usecases">
           {USE_CASES.map((u) => (
-            <div className="usecase" key={u.label}>
+            <div className="usecase usecase--body" key={u.label}>
               <span aria-hidden>{u.emoji}</span>
-              {u.label}
+              <div>
+                <strong>{u.label}</strong>
+                <p className="muted">{u.body}</p>
+              </div>
             </div>
           ))}
         </div>
       </Section>
 
-      {/* 10. Developer experience */}
+      {/* Developer experience */}
       <section className="section" id="dx">
         <div className="container">
           <div className="section-head">
             <span className="eyebrow">Developer Experience</span>
-            <h2>Stop rebuilding the same RAG pipeline for every project.</h2>
+            <h2>RAG Starter Open Source</h2>
             <p>
-              One repository, a documented .env, and the four commands you already
-              know.
+              Self-hosted, modular architecture: React, ASP.NET Core API, a Python RAG engine,
+              Qdrant, and a swappable LLM/embedding provider. The GitHub repository is the
+              developer / self-hosted version — it isn't the same deployment as the hosted SaaS.
             </p>
           </div>
-          <div className="dx">
-            <div className="dx__steps">
-              {[
-                ['Configure', 'Copy .env.example and set your keys and models.'],
-                ['Add your documents', 'Drop PDFs in the UI or run the CLI ingester.'],
-                ['Start the services', 'docker compose up brings the stack online.'],
-                ['Ask questions', 'Open Knowledge Chat and query with sources.'],
-              ].map(([title, body], i) => (
-                <div className="dx__step" key={title}>
-                  <span className="dx__num">{i + 1}</span>
-                  <div>
-                    <h3>{title}</h3>
-                    <p>{body}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="terminal">
-              <div className="terminal__bar">
-                <i />
-                <i />
-                <i />
-              </div>
-              <div className="terminal__body">
-                <div>
-                  <span className="c-prompt">$ </span>
-                  <span className="c-cmd">git clone rag-starter</span>
-                </div>
-                <div>
-                  <span className="c-prompt">$ </span>
-                  <span className="c-cmd">cp .env.example .env &amp;&amp; $EDITOR .env</span>
-                </div>
-                <div>
-                  <span className="c-prompt">$ </span>
-                  <span className="c-cmd">docker compose up -d</span>
-                </div>
-                <div className="c-ok"> ✔ frontend · api · rag · qdrant are up</div>
-                <div>
-                  <span className="c-dim"># open the frontend and ask away</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div style={{ marginTop: 'var(--sp-6)' }}>
-            <LinkButton size="lg" to="/signup">
-              Get Started
-              <ArrowRight size={16} />
+          <ArchitectureDiagram />
+          <div style={{ marginTop: 'var(--sp-6)', display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+            <LinkButton variant="secondary" href={GITHUB_URL}>
+              <GithubIcon size={16} />
+              View on GitHub
+            </LinkButton>
+            <LinkButton variant="ghost" to="/docs">
+              Read Documentation
             </LinkButton>
           </div>
         </div>
       </section>
 
-      {/* 12. Trust / social proof */}
+      {/* Trust */}
       <Section
         id="trust"
         eyebrow="Trust"
-        title="Built for developers. Open to inspection."
-        lead="No customer logos or testimonials yet — just the parts of the project you can verify for yourself."
+        title="No fake testimonials — just what you can verify."
       >
         <div className="trust2">
           <div className="trust2__grid">
@@ -536,30 +348,23 @@ export default function LandingPage() {
         </div>
       </Section>
 
-      {/* 11. Pricing */}
+      {/* Pricing */}
       <section className="section" id="pricing">
         <div className="container">
           <PricingPlans />
         </div>
       </section>
 
-      {/* 13. FAQ */}
+      {/* FAQ */}
       <Section id="faq" eyebrow="FAQ" title="Questions, answered honestly">
-        <div className="faq">
-          {FAQ.map((f) => (
-            <details className="faq__item" key={f.q}>
-              <summary>{f.q}</summary>
-              <p>{f.a}</p>
-            </details>
-          ))}
-        </div>
+        <Faq />
       </Section>
 
-      {/* 14. Final CTA */}
+      {/* Final CTA */}
       <section className="container">
         <div className="cta">
           <span className="eyebrow">Get Started</span>
-          <h2>Your next RAG project shouldn't start from zero.</h2>
+          <h2>Start building your knowledge workspace.</h2>
           <p style={{ maxWidth: 560, marginInline: 'auto', marginTop: 'var(--sp-3)' }}>
             Start with a working foundation and build what actually matters.
           </p>
@@ -568,9 +373,9 @@ export default function LandingPage() {
               Start Free
               <ArrowRight size={16} />
             </LinkButton>
-            <LinkButton variant="secondary" size="lg" href={GITHUB_URL}>
+            <LinkButton variant="secondary" size="lg" to="/github">
               <GithubIcon size={16} />
-              View on GitHub
+              Explore GitHub
             </LinkButton>
           </div>
         </div>

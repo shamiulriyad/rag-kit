@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState, type DragEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { UploadCloud, Search, FileText, X, FileWarning, Trash2, Star } from 'lucide-react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { UploadCloud, Search, FileText, X, FileWarning, Trash2, Star, Database } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Select } from '../components/ui/Field'
 import StatusPill from '../components/ui/StatusPill'
@@ -9,6 +9,7 @@ import UpgradeDialog from '../components/app/UpgradeDialog'
 import DocTags from '../components/app/DocTags'
 import { uploadPdf } from '../services/api'
 import { mockDocuments, type DocRecord, type DocStatus } from '../lib/mockData'
+import { mockKnowledgeBases } from '../lib/appData'
 import { formatBytes, relativeTime } from '../lib/format'
 import { usePlan } from '../lib/plan'
 import { useWorkspace } from '../lib/workspace'
@@ -17,9 +18,14 @@ import { useNotifications } from '../lib/notifications'
 
 const MAX_UPLOAD_MB = Number(import.meta.env.VITE_MAX_UPLOAD_MB ?? 200)
 
+function kbName(id: string) {
+  return mockKnowledgeBases.find((k) => k.id === id)?.name ?? 'Unassigned'
+}
+
 export default function DocumentsPage() {
   const toast = useToast()
   const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
   const { limits, isFree } = usePlan()
   const { tagsByDoc, allTags, isDocFavorite, toggleDoc } = useWorkspace()
   const { log } = useActivity()
@@ -31,10 +37,12 @@ export default function DocumentsPage() {
   const [query, setQuery] = useState('')
   const [statusFilter, setStatusFilter] = useState<DocStatus | 'all'>('all')
   const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const [kbFilter, setKbFilter] = useState<string>(params.get('kb') ?? 'all')
   const [selected, setSelected] = useState<DocRecord | null>(null)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
 
   const atDocLimit = isFree && docs.length >= limits.documents
+  const defaultKbForUpload = kbFilter !== 'all' ? kbFilter : mockKnowledgeBases[0]?.id
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -46,9 +54,10 @@ export default function DocumentsPage() {
         tags.some((t) => t.toLowerCase().includes(q))
       const matchesStatus = statusFilter === 'all' || d.status === statusFilter
       const matchesTag = !tagFilter || tags.includes(tagFilter)
-      return matchesQuery && matchesStatus && matchesTag
+      const matchesKb = kbFilter === 'all' || d.knowledgeBaseId === kbFilter
+      return matchesQuery && matchesStatus && matchesTag && matchesKb
     })
-  }, [docs, query, statusFilter, tagFilter, tagsByDoc])
+  }, [docs, query, statusFilter, tagFilter, kbFilter, tagsByDoc])
 
   async function ingest(file: File) {
     if (atDocLimit) {
@@ -75,6 +84,7 @@ export default function DocumentsPage() {
         chunks: 0,
         status: 'processing',
         uploadedAt: new Date().toISOString(),
+        knowledgeBaseId: defaultKbForUpload ?? 'kb_english',
       },
       ...d,
     ])
@@ -193,6 +203,22 @@ export default function DocumentsPage() {
           />
         </div>
         <Select
+          value={kbFilter}
+          onChange={(e) => {
+            const v = e.target.value
+            setKbFilter(v)
+            setParams(v === 'all' ? {} : { kb: v }, { replace: true })
+          }}
+          style={{ width: 200 }}
+        >
+          <option value="all">All Knowledge Bases</option>
+          {mockKnowledgeBases.map((kb) => (
+            <option key={kb.id} value={kb.id}>
+              {kb.name}
+            </option>
+          ))}
+        </Select>
+        <Select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value as DocStatus | 'all')}
           style={{ width: 180 }}
@@ -239,6 +265,7 @@ export default function DocumentsPage() {
             <tr>
               <th />
               <th>Document</th>
+              <th>Knowledge Base</th>
               <th>Tags</th>
               <th>Size</th>
               <th>Pages</th>
@@ -274,6 +301,15 @@ export default function DocumentsPage() {
                   </span>
                 </td>
                 <td>
+                  <span
+                    className="list__meta"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <Database size={13} />
+                    {kbName(d.knowledgeBaseId)}
+                  </span>
+                </td>
+                <td>
                   {(tagsByDoc[d.id] ?? []).length === 0 ? (
                     <span className="list__meta">—</span>
                   ) : (
@@ -297,7 +333,7 @@ export default function DocumentsPage() {
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={8} style={{ textAlign: 'center', padding: 'var(--sp-6)' }}>
+                <td colSpan={9} style={{ textAlign: 'center', padding: 'var(--sp-6)' }}>
                   No documents match your filters.
                 </td>
               </tr>
@@ -333,6 +369,8 @@ export default function DocumentsPage() {
             <dl className="kv">
               <dt>Document ID</dt>
               <dd className="mono">{selected.id}</dd>
+              <dt>Knowledge Base</dt>
+              <dd>{kbName(selected.knowledgeBaseId)}</dd>
               <dt>File size</dt>
               <dd>{formatBytes(selected.sizeBytes)}</dd>
               <dt>Pages</dt>
@@ -364,7 +402,10 @@ export default function DocumentsPage() {
                 />
                 {isDocFavorite(selected.id) ? 'Favorited' : 'Favorite'}
               </Button>
-              <Button variant="secondary" onClick={() => navigate('/chat')}>
+              <Button
+                variant="secondary"
+                onClick={() => navigate(`/chat?kb=${selected.knowledgeBaseId}`)}
+              >
                 Ask
               </Button>
               <Button variant="danger" onClick={() => removeDoc(selected.id)}>

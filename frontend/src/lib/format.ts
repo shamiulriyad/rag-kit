@@ -26,6 +26,21 @@ export function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+export type DateBucket = 'Today' | 'Yesterday' | 'Previous 7 days' | 'Older'
+
+const DAY_MS = 86_400_000
+
+export function dateBucket(iso: string): DateBucket {
+  const date = new Date(iso)
+  const now = new Date()
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const days = Math.floor((startOfDay(now) - startOfDay(date)) / DAY_MS)
+  if (days <= 0) return 'Today'
+  if (days === 1) return 'Yesterday'
+  if (days <= 7) return 'Previous 7 days'
+  return 'Older'
+}
+
 export function initials(name: string): string {
   return name
     .split(' ')

@@ -22,7 +22,7 @@ export default function FavoritesNav() {
       ) : (
         <div className="favnav">
           {kbs.map((k) => (
-            <Link key={k.id} to="/dashboard" className="favnav__item">
+            <Link key={k.id} to={`/knowledge-bases/${k.id}`} className="favnav__item">
               <Star fill="currentColor" />
               <span className="truncate">{k.name}</span>
             </Link>
@@ -34,7 +34,7 @@ export default function FavoritesNav() {
             </Link>
           ))}
           {pinnedConversations.map((c) => (
-            <Link key={c.id} to="/chat" className="favnav__item">
+            <Link key={c.id} to={`/chat?conversation=${c.id}`} className="favnav__item">
               <Pin />
               <span className="truncate">{c.title}</span>
             </Link>
