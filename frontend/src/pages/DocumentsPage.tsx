@@ -1,15 +1,23 @@
-import { useMemo, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { UploadCloud, Search, FileText, X, FileWarning, Trash2, Star, Database } from 'lucide-react'
+import { UploadCloud, Search, FileText, X, FileWarning, Trash2, Star, Database, RotateCcw } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Select } from '../components/ui/Field'
 import StatusPill from '../components/ui/StatusPill'
 import { useToast } from '../components/ui/Toast'
 import UpgradeDialog from '../components/app/UpgradeDialog'
 import DocTags from '../components/app/DocTags'
-import { uploadPdf } from '../services/api'
-import { mockDocuments, type DocRecord, type DocStatus } from '../lib/mockData'
-import { mockKnowledgeBases } from '../lib/appData'
+import {
+  ApiError,
+  deleteDocument,
+  getDocument,
+  listDocuments,
+  listKnowledgeBases,
+  reprocessDocument,
+  uploadDocument,
+  type DocumentRecord,
+  type KnowledgeBaseSummary,
+} from '../services/api'
 import { formatBytes, relativeTime } from '../lib/format'
 import { usePlan } from '../lib/plan'
 import { useWorkspace } from '../lib/workspace'
@@ -17,9 +25,10 @@ import { useActivity } from '../lib/activity'
 import { useNotifications } from '../lib/notifications'
 
 const MAX_UPLOAD_MB = Number(import.meta.env.VITE_MAX_UPLOAD_MB ?? 200)
+const TERMINAL_STATUSES = new Set(['completed', 'failed'])
 
-function kbName(id: string) {
-  return mockKnowledgeBases.find((k) => k.id === id)?.name ?? 'Unassigned'
+function friendlyError(err: unknown, fallback: string) {
+  return err instanceof ApiError ? err.message : fallback
 }
 
 export default function DocumentsPage() {
@@ -31,37 +40,101 @@ export default function DocumentsPage() {
   const { log } = useActivity()
   const { push } = useNotifications()
   const inputRef = useRef<HTMLInputElement>(null)
-  const [docs, setDocs] = useState<DocRecord[]>(mockDocuments)
+
+  const [kbs, setKbs] = useState<KnowledgeBaseSummary[]>([])
+  const [docs, setDocs] = useState<DocumentRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [query, setQuery] = useState('')
-  const [statusFilter, setStatusFilter] = useState<DocStatus | 'all'>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const [kbFilter, setKbFilter] = useState<string>(params.get('kb') ?? 'all')
-  const [selected, setSelected] = useState<DocRecord | null>(null)
+  const [selected, setSelected] = useState<DocumentRecord | null>(null)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
 
+  useEffect(() => {
+    let cancelled = false
+    listKnowledgeBases()
+      .then(async (kbList) => {
+        if (cancelled) return
+        setKbs(kbList)
+        const perKb = await Promise.all(kbList.map((kb) => listDocuments(kb.id)))
+        if (cancelled) return
+        setDocs(perKb.flat())
+      })
+      .catch((err) => {
+        if (!cancelled) setLoadError(friendlyError(err, 'Could not load your documents.'))
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const kbName = (id: string) => kbs.find((k) => k.id === id)?.name ?? 'Unassigned'
+
   const atDocLimit = isFree && docs.length >= limits.documents
-  const defaultKbForUpload = kbFilter !== 'all' ? kbFilter : mockKnowledgeBases[0]?.id
+  const defaultKbForUpload = kbFilter !== 'all' ? kbFilter : kbs[0]?.id
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return docs.filter((d) => {
       const tags = tagsByDoc[d.id] ?? []
       const matchesQuery =
-        !q ||
-        d.name.toLowerCase().includes(q) ||
-        tags.some((t) => t.toLowerCase().includes(q))
-      const matchesStatus = statusFilter === 'all' || d.status === statusFilter
+        !q || d.name.toLowerCase().includes(q) || tags.some((t) => t.toLowerCase().includes(q))
+      const matchesStatus = statusFilter === 'all' || d.status.toLowerCase() === statusFilter
       const matchesTag = !tagFilter || tags.includes(tagFilter)
       const matchesKb = kbFilter === 'all' || d.knowledgeBaseId === kbFilter
       return matchesQuery && matchesStatus && matchesTag && matchesKb
     })
   }, [docs, query, statusFilter, tagFilter, kbFilter, tagsByDoc])
 
+  // Backend processing is async (queued -> processing -> completed/failed) - poll the
+  // just-touched document until it reaches a terminal state instead of leaving the row stuck.
+  function pollUntilDone(id: string, attempts = 40) {
+    if (attempts <= 0) return
+    setTimeout(async () => {
+      try {
+        const doc = await getDocument(id)
+        setDocs((d) => d.map((x) => (x.id === id ? doc : x)))
+        setSelected((s) => (s?.id === id ? doc : s))
+        if (!TERMINAL_STATUSES.has(doc.status.toLowerCase())) {
+          pollUntilDone(id, attempts - 1)
+          return
+        }
+        if (doc.status.toLowerCase() === 'completed') {
+          log('upload', `Uploaded ${doc.name}`)
+          push({
+            type: 'doc_ready',
+            title: 'Document processed',
+            body: `${doc.name} finished indexing — ${doc.chunks ?? 0} chunks.`,
+          })
+        } else {
+          push({
+            type: 'doc_failed',
+            title: 'Processing failed',
+            body: `${doc.name}: ${doc.note ?? 'Processing failed.'}`,
+          })
+        }
+      } catch {
+        // Transient poll failure - just stop; the row keeps its last known status and the
+        // user can reload the page to see the latest.
+      }
+    }, 3000)
+  }
+
   async function ingest(file: File) {
     if (atDocLimit) {
       setUpgradeOpen(true)
+      if (inputRef.current) inputRef.current.value = ''
+      return
+    }
+    if (!defaultKbForUpload) {
+      toast('err', 'Create a Knowledge Base first.')
       if (inputRef.current) inputRef.current.value = ''
       return
     }
@@ -74,63 +147,14 @@ export default function DocumentsPage() {
       return
     }
 
-    const tempId = `tmp_${Date.now()}`
-    setDocs((d) => [
-      {
-        id: tempId,
-        name: file.name,
-        sizeBytes: file.size,
-        pages: 0,
-        chunks: 0,
-        status: 'processing',
-        uploadedAt: new Date().toISOString(),
-        knowledgeBaseId: defaultKbForUpload ?? 'kb_english',
-      },
-      ...d,
-    ])
     setUploading(true)
-
-    const finish = (pages: number, chunks: number, note?: string) => {
-      setDocs((d) =>
-        d.map((doc) =>
-          doc.id === tempId ? { ...doc, status: 'ready', pages, chunks, note } : doc,
-        ),
-      )
-      log('upload', `Uploaded ${file.name}`)
-      push({
-        type: 'doc_ready',
-        title: 'Document processed',
-        body: `${file.name} finished indexing — ${chunks.toLocaleString()} chunks.`,
-      })
-    }
-
     try {
-      const res = await uploadPdf(file)
-      finish(res.pages, res.chunks)
-      toast('ok', `Indexed ${res.document} — ${res.pages} pages, ${res.chunks} chunks.`)
+      const doc = await uploadDocument(defaultKbForUpload, file)
+      setDocs((d) => [doc, ...d])
+      toast('ok', `"${doc.name}" uploaded — processing in the background.`)
+      pollUntilDone(doc.id)
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Upload failed'
-      const looksUnreachable = /reach the backend/i.test(message)
-      if (looksUnreachable) {
-        finish(
-          Math.max(1, Math.round(file.size / 42000)),
-          Math.max(1, Math.round(file.size / 12000)),
-          'Simulated locally — the .NET API was unreachable.',
-        )
-        toast('ok', message)
-      } else {
-        setDocs((d) =>
-          d.map((doc) =>
-            doc.id === tempId ? { ...doc, status: 'failed', note: message } : doc,
-          ),
-        )
-        push({
-          type: 'doc_failed',
-          title: 'Processing failed',
-          body: `${file.name}: ${message}`,
-        })
-        toast('err', message)
-      }
+      toast('err', friendlyError(err, 'Upload failed.'))
     } finally {
       setUploading(false)
       if (inputRef.current) inputRef.current.value = ''
@@ -144,12 +168,29 @@ export default function DocumentsPage() {
     if (file) ingest(file)
   }
 
-  function removeDoc(id: string) {
+  async function removeDoc(id: string) {
     const doc = docs.find((d) => d.id === id)
-    setDocs((d) => d.filter((doc) => doc.id !== id))
-    setSelected(null)
-    if (doc) log('delete', `Deleted ${doc.name}`)
-    toast('ok', 'Document removed from the workspace.')
+    try {
+      await deleteDocument(id)
+      setDocs((d) => d.filter((x) => x.id !== id))
+      setSelected(null)
+      if (doc) log('delete', `Deleted ${doc.name}`)
+      toast('ok', 'Document deleted.')
+    } catch (err) {
+      toast('err', friendlyError(err, 'Could not delete this document.'))
+    }
+  }
+
+  async function retryDoc(id: string) {
+    try {
+      const doc = await reprocessDocument(id)
+      setDocs((d) => d.map((x) => (x.id === id ? doc : x)))
+      setSelected((s) => (s?.id === id ? doc : s))
+      toast('ok', 'Reprocessing started.')
+      pollUntilDone(id)
+    } catch (err) {
+      toast('err', friendlyError(err, 'Could not reprocess this document.'))
+    }
   }
 
   return (
@@ -185,12 +226,26 @@ export default function DocumentsPage() {
         <Button
           variant="secondary"
           loading={uploading}
+          disabled={!loading && kbs.length === 0}
           onClick={() => inputRef.current?.click()}
         >
           <UploadCloud size={15} />
           Choose file
         </Button>
       </div>
+
+      {!loading && kbs.length === 0 && (
+        <div className="secret-note">
+          <Database />
+          <span>
+            You don't have a Knowledge Base yet.{' '}
+            <button className="btn btn--ghost btn--sm" onClick={() => navigate('/knowledge-bases')}>
+              Create one
+            </button>{' '}
+            before uploading documents.
+          </span>
+        </div>
+      )}
 
       <div className="toolbar">
         <div className="search">
@@ -212,19 +267,16 @@ export default function DocumentsPage() {
           style={{ width: 200 }}
         >
           <option value="all">All Knowledge Bases</option>
-          {mockKnowledgeBases.map((kb) => (
+          {kbs.map((kb) => (
             <option key={kb.id} value={kb.id}>
               {kb.name}
             </option>
           ))}
         </Select>
-        <Select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as DocStatus | 'all')}
-          style={{ width: 180 }}
-        >
+        <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} style={{ width: 180 }}>
           <option value="all">All statuses</option>
-          <option value="ready">Ready</option>
+          <option value="completed">Ready</option>
+          <option value="queued">Queued</option>
           <option value="processing">Processing</option>
           <option value="failed">Failed</option>
         </Select>
@@ -259,88 +311,97 @@ export default function DocumentsPage() {
         ))}
       </div>
 
-      <div className="table-wrap">
-        <table className="data">
-          <thead>
-            <tr>
-              <th />
-              <th>Document</th>
-              <th>Knowledge Base</th>
-              <th>Tags</th>
-              <th>Size</th>
-              <th>Pages</th>
-              <th>Chunks</th>
-              <th>Uploaded</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.map((d) => (
-              <tr key={d.id} onClick={() => setSelected(d)}>
-                <td onClick={(e) => e.stopPropagation()}>
-                  <button
-                    className="starbtn"
-                    aria-label={
-                      isDocFavorite(d.id) ? 'Remove from favorites' : 'Add to favorites'
-                    }
-                    aria-pressed={isDocFavorite(d.id)}
-                    onClick={() => toggleDoc(d.id)}
-                  >
-                    <Star
-                      size={15}
-                      fill={isDocFavorite(d.id) ? 'currentColor' : 'none'}
-                    />
-                  </button>
-                </td>
-                <td>
-                  <span className="doc-name">
-                    <span className="list__icon">
-                      {d.status === 'failed' ? <FileWarning /> : <FileText />}
-                    </span>
-                    <span className="truncate">{d.name}</span>
-                  </span>
-                </td>
-                <td>
-                  <span
-                    className="list__meta"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                  >
-                    <Database size={13} />
-                    {kbName(d.knowledgeBaseId)}
-                  </span>
-                </td>
-                <td>
-                  {(tagsByDoc[d.id] ?? []).length === 0 ? (
-                    <span className="list__meta">—</span>
-                  ) : (
-                    <span className="tags">
-                      {(tagsByDoc[d.id] ?? []).map((t) => (
-                        <span key={t} className="tag">
-                          {t}
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                </td>
-                <td>{formatBytes(d.sizeBytes)}</td>
-                <td>{d.pages || '—'}</td>
-                <td>{d.chunks || '—'}</td>
-                <td>{relativeTime(d.uploadedAt)}</td>
-                <td>
-                  <StatusPill status={d.status} />
-                </td>
-              </tr>
-            ))}
-            {filtered.length === 0 && (
+      {loading ? (
+        <div className="state">
+          <span className="spinner" />
+        </div>
+      ) : loadError ? (
+        <div className="state state--error">
+          <span className="state__icon">
+            <FileWarning />
+          </span>
+          <h3>Couldn't load your documents</h3>
+          <p className="muted">{loadError}</p>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="data">
+            <thead>
               <tr>
-                <td colSpan={9} style={{ textAlign: 'center', padding: 'var(--sp-6)' }}>
-                  No documents match your filters.
-                </td>
+                <th />
+                <th>Document</th>
+                <th>Knowledge Base</th>
+                <th>Tags</th>
+                <th>Size</th>
+                <th>Pages</th>
+                <th>Chunks</th>
+                <th>Uploaded</th>
+                <th>Status</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {filtered.map((d) => (
+                <tr key={d.id} onClick={() => setSelected(d)}>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <button
+                      className="starbtn"
+                      aria-label={isDocFavorite(d.id) ? 'Remove from favorites' : 'Add to favorites'}
+                      aria-pressed={isDocFavorite(d.id)}
+                      onClick={() => toggleDoc(d.id)}
+                    >
+                      <Star size={15} fill={isDocFavorite(d.id) ? 'currentColor' : 'none'} />
+                    </button>
+                  </td>
+                  <td>
+                    <span className="doc-name">
+                      <span className="list__icon">
+                        {d.status.toLowerCase() === 'failed' ? <FileWarning /> : <FileText />}
+                      </span>
+                      <span className="truncate">{d.name}</span>
+                    </span>
+                  </td>
+                  <td>
+                    <span
+                      className="list__meta"
+                      style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                    >
+                      <Database size={13} />
+                      {kbName(d.knowledgeBaseId)}
+                    </span>
+                  </td>
+                  <td>
+                    {(tagsByDoc[d.id] ?? []).length === 0 ? (
+                      <span className="list__meta">—</span>
+                    ) : (
+                      <span className="tags">
+                        {(tagsByDoc[d.id] ?? []).map((t) => (
+                          <span key={t} className="tag">
+                            {t}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                  </td>
+                  <td>{formatBytes(d.sizeBytes)}</td>
+                  <td>{d.pages || '—'}</td>
+                  <td>{d.chunks || '—'}</td>
+                  <td>{relativeTime(d.uploadedAt)}</td>
+                  <td>
+                    <StatusPill status={d.status} />
+                  </td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: 'var(--sp-6)' }}>
+                    No documents match your filters.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {selected && (
         <div className="drawer-scrim" onClick={() => setSelected(null)}>
@@ -379,8 +440,6 @@ export default function DocumentsPage() {
               <dd>{selected.chunks || '—'}</dd>
               <dt>Uploaded</dt>
               <dd>{new Date(selected.uploadedAt).toLocaleString()}</dd>
-              <dt>Collection</dt>
-              <dd className="mono">rag_documents</dd>
             </dl>
 
             {selected.note && (
@@ -390,16 +449,9 @@ export default function DocumentsPage() {
               </div>
             )}
 
-            <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 'auto' }}>
-              <Button
-                variant="secondary"
-                block
-                onClick={() => toggleDoc(selected.id)}
-              >
-                <Star
-                  size={15}
-                  fill={isDocFavorite(selected.id) ? 'currentColor' : 'none'}
-                />
+            <div style={{ display: 'flex', gap: 'var(--sp-3)', marginTop: 'auto', flexWrap: 'wrap' }}>
+              <Button variant="secondary" block onClick={() => toggleDoc(selected.id)}>
+                <Star size={15} fill={isDocFavorite(selected.id) ? 'currentColor' : 'none'} />
                 {isDocFavorite(selected.id) ? 'Favorited' : 'Favorite'}
               </Button>
               <Button
@@ -408,6 +460,12 @@ export default function DocumentsPage() {
               >
                 Ask
               </Button>
+              {selected.status.toLowerCase() === 'failed' && (
+                <Button variant="secondary" onClick={() => retryDoc(selected.id)}>
+                  <RotateCcw size={15} />
+                  Reprocess
+                </Button>
+              )}
               <Button variant="danger" onClick={() => removeDoc(selected.id)}>
                 <Trash2 size={15} />
               </Button>

@@ -14,13 +14,6 @@ export interface ChatResponse {
   sources: Source[]
 }
 
-export interface UploadResponse {
-  document: string
-  pages: number
-  chunks: number
-  recreated: boolean
-}
-
 export interface Health {
   status: string
   rag: string
@@ -140,12 +133,6 @@ export function checkHealth(): Promise<Health> {
   return request<Health>('/api/health')
 }
 
-export function uploadPdf(file: File): Promise<UploadResponse> {
-  const form = new FormData()
-  form.append('file', file)
-  return request<UploadResponse>('/api/documents/upload', { method: 'POST', body: form })
-}
-
 export interface AskOptions {
   topK?: number
   /** Optional document scope for the retrieval step; the backend may ignore it. */
@@ -219,6 +206,118 @@ export async function logout(refreshToken: string): Promise<void> {
 
 export function getMe(): Promise<UserProfile> {
   return request<UserProfile>('/api/users/me')
+}
+
+// --- Knowledge Bases --------------------------------------------------
+// Mirrors backend/DTOs/KnowledgeBases/KnowledgeBaseDtos.cs.
+
+export interface KnowledgeBaseSummary {
+  id: string
+  name: string
+  description: string
+  documents: number
+  chunks: number
+  createdAt: string
+  updatedAt: string
+  role: string
+}
+
+export interface KnowledgeBaseStats {
+  id: string
+  documentCount: number
+  chunkCount: number
+  completedDocuments: number
+  processingDocuments: number
+  failedDocuments: number
+  storageBytes: number
+}
+
+export interface KnowledgeBaseMember {
+  id: string
+  userId: string
+  email: string
+  fullName: string
+  role: string
+  createdAt: string
+}
+
+export function listKnowledgeBases(): Promise<KnowledgeBaseSummary[]> {
+  return request('/api/knowledge-bases')
+}
+
+export function getKnowledgeBase(id: string): Promise<KnowledgeBaseSummary> {
+  return request(`/api/knowledge-bases/${id}`)
+}
+
+export function getKnowledgeBaseStats(id: string): Promise<KnowledgeBaseStats> {
+  return request(`/api/knowledge-bases/${id}/stats`)
+}
+
+export function listKnowledgeBaseMembers(id: string): Promise<KnowledgeBaseMember[]> {
+  return request(`/api/knowledge-bases/${id}/members`)
+}
+
+export function createKnowledgeBase(name: string, description: string): Promise<KnowledgeBaseSummary> {
+  return request('/api/knowledge-bases', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, description: description || null }),
+  })
+}
+
+export function updateKnowledgeBase(
+  id: string,
+  patch: { name?: string; description?: string },
+): Promise<KnowledgeBaseSummary> {
+  return request(`/api/knowledge-bases/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  })
+}
+
+export function deleteKnowledgeBase(id: string): Promise<void> {
+  return request(`/api/knowledge-bases/${id}`, { method: 'DELETE' })
+}
+
+// --- Documents --------------------------------------------------------
+// Mirrors backend/DTOs/Documents/DocumentDtos.cs. Documents are always
+// scoped to a Knowledge Base - there is no "list every document" endpoint.
+
+export interface DocumentRecord {
+  id: string
+  knowledgeBaseId: string
+  name: string
+  sizeBytes: number
+  fileType: string
+  pages: number | null
+  chunks: number | null
+  status: string
+  note: string | null
+  uploadedAt: string
+  processedAt: string | null
+}
+
+export function listDocuments(knowledgeBaseId: string): Promise<DocumentRecord[]> {
+  return request(`/api/knowledge-bases/${knowledgeBaseId}/documents`)
+}
+
+export function getDocument(id: string): Promise<DocumentRecord> {
+  return request(`/api/documents/${id}`)
+}
+
+export function uploadDocument(knowledgeBaseId: string, file: File): Promise<DocumentRecord> {
+  const form = new FormData()
+  form.append('file', file)
+  return request(`/api/knowledge-bases/${knowledgeBaseId}/documents`, { method: 'POST', body: form })
+}
+
+export function deleteDocument(id: string): Promise<void> {
+  return request(`/api/documents/${id}`, { method: 'DELETE' })
+}
+
+export function reprocessDocument(id: string): Promise<DocumentRecord> {
+  return request(`/api/documents/${id}/reprocess`, { method: 'POST' })
 }
 
 export { BASE_URL }

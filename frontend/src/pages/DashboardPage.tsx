@@ -20,13 +20,16 @@ import StatusPill from '../components/ui/StatusPill'
 import PlanUsageCard from '../components/app/PlanUsageCard'
 import CreateKbModal from '../components/app/CreateKbModal'
 import { useToast } from '../components/ui/Toast'
-import { checkHealth } from '../services/api'
 import {
-  mockDocuments,
-  mockQuestions,
-  systemHealth,
-} from '../lib/mockData'
-import { mockKnowledgeBases, type ActivityType } from '../lib/appData'
+  checkHealth,
+  createKnowledgeBase,
+  listDocuments,
+  listKnowledgeBases,
+  type DocumentRecord,
+  type KnowledgeBaseSummary,
+} from '../services/api'
+import { mockQuestions, systemHealth } from '../lib/mockData'
+import { type ActivityType } from '../lib/appData'
 import { formatNumber, relativeTime } from '../lib/format'
 import { useWorkspace } from '../lib/workspace'
 import { useActivity } from '../lib/activity'
@@ -47,6 +50,8 @@ export default function DashboardPage() {
   const { entries, log } = useActivity()
   const [apiOnline, setApiOnline] = useState<boolean | null>(null)
   const [createKbOpen, setCreateKbOpen] = useState(false)
+  const [kbs, setKbs] = useState<KnowledgeBaseSummary[]>([])
+  const [docs, setDocs] = useState<DocumentRecord[]>([])
 
   useEffect(() => {
     checkHealth()
@@ -54,38 +59,40 @@ export default function DashboardPage() {
       .catch(() => setApiOnline(false))
   }, [])
 
-  const totalChunks = mockDocuments.reduce((s, d) => s + d.chunks, 0)
+  useEffect(() => {
+    listKnowledgeBases()
+      .then(async (kbList) => {
+        setKbs(kbList)
+        const perKb = await Promise.all(kbList.map((kb) => listDocuments(kb.id)))
+        setDocs(perKb.flat())
+      })
+      .catch(() => {
+        /* Dashboard degrades gracefully to zeroed stats on failure. */
+      })
+  }, [])
+
+  const totalChunks = docs.reduce((s, d) => s + (d.chunks ?? 0), 0)
   const totalSources = mockQuestions.reduce((s, q) => s + q.sources, 0)
-  const recentDocs = [...mockDocuments]
+  const recentDocs = [...docs]
     .sort((a, b) => +new Date(b.uploadedAt) - +new Date(a.uploadedAt))
     .slice(0, 4)
 
   return (
     <div className="page">
       <div className="statgrid">
-        <StatCard
-          icon={FileText}
-          value={String(mockDocuments.length)}
-          label="Documents indexed"
-          delta={{ text: '+2 this week', trend: 'up' }}
-        />
-        <StatCard
-          icon={Boxes}
-          value={formatNumber(totalChunks)}
-          label="Chunks in Qdrant"
-          delta={{ text: '+486 this week', trend: 'up' }}
-        />
+        <StatCard icon={FileText} value={String(docs.length)} label="Documents indexed" />
+        <StatCard icon={Boxes} value={formatNumber(totalChunks)} label="Chunks in Qdrant" />
         <StatCard
           icon={MessageSquare}
           value="128"
           label="Questions asked"
-          delta={{ text: '+31 this week', trend: 'up' }}
+          delta={{ text: 'demo data', trend: 'flat' }}
         />
         <StatCard
           icon={Quote}
           value={String(totalSources * 34)}
           label="Sources cited"
-          delta={{ text: 'stable', trend: 'flat' }}
+          delta={{ text: 'demo data', trend: 'flat' }}
         />
       </div>
 
@@ -109,10 +116,15 @@ export default function DashboardPage() {
                   <FileText />
                 </span>
                 <span className="grow truncate">{d.name}</span>
-                <span className="list__meta">{d.chunks} chunks</span>
+                <span className="list__meta">{d.chunks ?? 0} chunks</span>
                 <StatusPill status={d.status} />
               </div>
             ))}
+            {recentDocs.length === 0 && (
+              <p className="muted" style={{ fontSize: '0.85rem' }}>
+                No documents uploaded yet.
+              </p>
+            )}
           </div>
         </section>
 
@@ -213,11 +225,16 @@ export default function DashboardPage() {
           <div className="panel-head">
             <h3>Knowledge Bases</h3>
             <span className="muted" style={{ fontSize: '0.8rem' }}>
-              {mockKnowledgeBases.length} total
+              {kbs.length} total
             </span>
           </div>
           <div className="list">
-            {mockKnowledgeBases.map((kb) => (
+            {kbs.length === 0 && (
+              <p className="muted" style={{ fontSize: '0.85rem' }}>
+                No Knowledge Bases yet.
+              </p>
+            )}
+            {kbs.map((kb) => (
               <div
                 className="list__row"
                 key={kb.id}
@@ -284,7 +301,9 @@ export default function DashboardPage() {
       <CreateKbModal
         open={createKbOpen}
         onClose={() => setCreateKbOpen(false)}
-        onCreate={(name) => {
+        onCreate={async (name, description) => {
+          const kb = await createKnowledgeBase(name, description)
+          setKbs((k) => [kb, ...k])
           log('kb_created', `Created the ${name} Knowledge Base`)
           toast('ok', `Created "${name}". Manage it from Knowledge Bases.`)
         }}

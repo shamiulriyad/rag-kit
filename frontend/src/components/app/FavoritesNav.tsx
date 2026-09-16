@@ -1,16 +1,50 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Star, FileText, Pin } from 'lucide-react'
 import { useWorkspace } from '../../lib/workspace'
-import { mockKnowledgeBases } from '../../lib/appData'
-import { mockDocuments } from '../../lib/mockData'
+import {
+  getDocument,
+  getKnowledgeBase,
+  type DocumentRecord,
+  type KnowledgeBaseSummary,
+} from '../../services/api'
 
 export default function FavoritesNav() {
   const { starredKbs, favoriteDocs, pinnedConversations } = useWorkspace()
+  const [kbs, setKbs] = useState<KnowledgeBaseSummary[]>([])
+  const [docs, setDocs] = useState<DocumentRecord[]>([])
 
-  const kbs = mockKnowledgeBases.filter((k) => starredKbs.includes(k.id))
-  const docs = mockDocuments.filter((d) => favoriteDocs.includes(d.id))
-  const empty =
-    kbs.length === 0 && docs.length === 0 && pinnedConversations.length === 0
+  // Fetched individually by id (not from a list) so starring one item doesn't require
+  // loading every Knowledge Base/document just to resolve a name for the sidebar.
+  useEffect(() => {
+    if (starredKbs.length === 0) {
+      setKbs([])
+      return
+    }
+    let cancelled = false
+    Promise.all(starredKbs.map((id) => getKnowledgeBase(id).catch(() => null))).then((results) => {
+      if (!cancelled) setKbs(results.filter((k): k is KnowledgeBaseSummary => k !== null))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [starredKbs])
+
+  useEffect(() => {
+    if (favoriteDocs.length === 0) {
+      setDocs([])
+      return
+    }
+    let cancelled = false
+    Promise.all(favoriteDocs.map((id) => getDocument(id).catch(() => null))).then((results) => {
+      if (!cancelled) setDocs(results.filter((d): d is DocumentRecord => d !== null))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [favoriteDocs])
+
+  const empty = kbs.length === 0 && docs.length === 0 && pinnedConversations.length === 0
 
   return (
     <div>

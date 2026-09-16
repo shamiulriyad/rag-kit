@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import {
   Database,
@@ -6,20 +6,32 @@ import {
   MessagesSquare,
   FileText,
   Boxes,
-  MessageSquare,
+  HardDrive,
   Star,
   ArrowLeft,
 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import StatusPill from '../components/ui/StatusPill'
-import { mockKnowledgeBases } from '../lib/appData'
-import { mockDocuments } from '../lib/mockData'
-import { mockTeam } from '../lib/appData'
+import {
+  ApiError,
+  getKnowledgeBase,
+  getKnowledgeBaseStats,
+  listDocuments,
+  listKnowledgeBaseMembers,
+  type DocumentRecord,
+  type KnowledgeBaseMember,
+  type KnowledgeBaseStats,
+  type KnowledgeBaseSummary,
+} from '../services/api'
 import { formatBytes, formatNumber, relativeTime } from '../lib/format'
 import { useWorkspace } from '../lib/workspace'
 
 const TABS = ['overview', 'documents', 'chat', 'members', 'settings'] as const
 type Tab = (typeof TABS)[number]
+
+function friendlyError(err: unknown, fallback: string) {
+  return err instanceof ApiError ? err.message : fallback
+}
 
 export default function KnowledgeBaseDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -27,8 +39,12 @@ export default function KnowledgeBaseDetailPage() {
   const [params, setParams] = useSearchParams()
   const { isKbStarred, toggleKb } = useWorkspace()
 
-  const kb = useMemo(() => mockKnowledgeBases.find((k) => k.id === id), [id])
-  const docs = useMemo(() => mockDocuments.filter((d) => d.knowledgeBaseId === id), [id])
+  const [kb, setKb] = useState<KnowledgeBaseSummary | null>(null)
+  const [stats, setStats] = useState<KnowledgeBaseStats | null>(null)
+  const [docs, setDocs] = useState<DocumentRecord[]>([])
+  const [members, setMembers] = useState<KnowledgeBaseMember[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const tabParam = params.get('tab') as Tab | null
   const [tab, setTab] = useState<Tab>(tabParam && TABS.includes(tabParam) ? tabParam : 'overview')
@@ -38,15 +54,44 @@ export default function KnowledgeBaseDetailPage() {
     setParams(next === 'overview' ? {} : { tab: next }, { replace: true })
   }
 
-  if (!kb) {
+  const load = useCallback(() => {
+    if (!id) return
+    setLoading(true)
+    setError(null)
+    Promise.all([getKnowledgeBase(id), getKnowledgeBaseStats(id), listDocuments(id), listKnowledgeBaseMembers(id)])
+      .then(([kbRes, statsRes, docsRes, membersRes]) => {
+        setKb(kbRes)
+        setStats(statsRes)
+        setDocs(docsRes)
+        setMembers(membersRes)
+      })
+      .catch((err) => setError(friendlyError(err, 'Could not load this Knowledge Base.')))
+      .finally(() => setLoading(false))
+  }, [id])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  if (loading) {
     return (
       <div className="page">
         <div className="state">
+          <span className="spinner" />
+        </div>
+      </div>
+    )
+  }
+
+  if (error || !kb) {
+    return (
+      <div className="page">
+        <div className="state state--error">
           <span className="state__icon">
             <Database />
           </span>
-          <h3>Knowledge base not found</h3>
-          <p className="muted">It may have been deleted or renamed.</p>
+          <h3>{error ? "Couldn't load this Knowledge Base" : 'Knowledge base not found'}</h3>
+          <p className="muted">{error ?? 'It may have been deleted or you no longer have access.'}</p>
           <Button variant="secondary" onClick={() => navigate('/knowledge-bases')}>
             Back to Knowledge Bases
           </Button>
@@ -70,7 +115,7 @@ export default function KnowledgeBaseDetailPage() {
           <div>
             <h3 style={{ margin: 0 }}>{kb.name}</h3>
             <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
-              {kb.description}
+              {kb.description || 'No description yet.'}
             </p>
           </div>
           <button
@@ -102,7 +147,7 @@ export default function KnowledgeBaseDetailPage() {
             </span>
           </div>
           <div>
-            <div className="stat__value">{docs.length}</div>
+            <div className="stat__value">{stats?.documentCount ?? kb.documents}</div>
             <div className="stat__label">Documents</div>
           </div>
         </div>
@@ -113,19 +158,19 @@ export default function KnowledgeBaseDetailPage() {
             </span>
           </div>
           <div>
-            <div className="stat__value">{formatNumber(kb.chunks)}</div>
+            <div className="stat__value">{formatNumber(stats?.chunkCount ?? kb.chunks)}</div>
             <div className="stat__label">Chunks</div>
           </div>
         </div>
         <div className="card stat">
           <div className="stat__top">
             <span className="stat__icon">
-              <MessageSquare />
+              <HardDrive />
             </span>
           </div>
           <div>
-            <div className="stat__value">{formatNumber(kb.questions)}</div>
-            <div className="stat__label">Questions</div>
+            <div className="stat__value">{formatBytes(stats?.storageBytes ?? 0)}</div>
+            <div className="stat__label">Storage used</div>
           </div>
         </div>
       </div>
@@ -153,11 +198,17 @@ export default function KnowledgeBaseDetailPage() {
             <dt>Knowledge Base ID</dt>
             <dd className="mono">{kb.id}</dd>
             <dt>Documents</dt>
-            <dd>{docs.length}</dd>
+            <dd>{stats?.documentCount ?? kb.documents}</dd>
+            <dt>Ready</dt>
+            <dd>{stats?.completedDocuments ?? 0}</dd>
+            <dt>Processing</dt>
+            <dd>{stats?.processingDocuments ?? 0}</dd>
+            <dt>Failed</dt>
+            <dd>{stats?.failedDocuments ?? 0}</dd>
             <dt>Chunks indexed</dt>
-            <dd>{formatNumber(kb.chunks)}</dd>
-            <dt>Questions asked</dt>
-            <dd>{formatNumber(kb.questions)}</dd>
+            <dd>{formatNumber(stats?.chunkCount ?? kb.chunks)}</dd>
+            <dt>Storage used</dt>
+            <dd>{formatBytes(stats?.storageBytes ?? 0)}</dd>
             <dt>Last updated</dt>
             <dd>{relativeTime(kb.updatedAt)}</dd>
           </dl>
@@ -233,18 +284,15 @@ export default function KnowledgeBaseDetailPage() {
             <h3>Members</h3>
           </div>
           <div className="list">
-            {kb.members.map((name) => {
-              const member = mockTeam.members.find((m) => m.name === name)
-              return (
-                <div className="list__row" key={name}>
-                  <span className="avatar avatar--sm">
-                    {name.split(' ').map((p) => p[0]).slice(0, 2).join('')}
-                  </span>
-                  <span className="grow">{name}</span>
-                  <span className="list__meta">{member?.role ?? 'Member'}</span>
-                </div>
-              )
-            })}
+            {members.map((m) => (
+              <div className="list__row" key={m.id || m.userId}>
+                <span className="avatar avatar--sm">
+                  {(m.fullName || m.email).split(' ').map((p) => p[0]).slice(0, 2).join('')}
+                </span>
+                <span className="grow">{m.fullName || m.email}</span>
+                <span className="list__meta">{m.role}</span>
+              </div>
+            ))}
           </div>
         </section>
       )}

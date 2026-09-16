@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Database,
@@ -10,24 +10,34 @@ import {
   Trash2,
   FileText,
   Boxes,
-  MessageSquare,
 } from 'lucide-react'
 import { useToast } from '../components/ui/Toast'
 import CreateKbModal from '../components/app/CreateKbModal'
 import UpgradeDialog from '../components/app/UpgradeDialog'
 import { useDismiss } from '../lib/hooks'
-import { mockKnowledgeBases, type KnowledgeBase } from '../lib/appData'
+import {
+  ApiError,
+  createKnowledgeBase,
+  deleteKnowledgeBase,
+  listKnowledgeBases,
+  updateKnowledgeBase,
+  type KnowledgeBaseSummary,
+} from '../services/api'
 import { formatNumber, relativeTime } from '../lib/format'
 import { useWorkspace } from '../lib/workspace'
 import { usePlan } from '../lib/plan'
 import { useActivity } from '../lib/activity'
+
+function friendlyError(err: unknown, fallback: string) {
+  return err instanceof ApiError ? err.message : fallback
+}
 
 function KbMenu({
   kb,
   onRename,
   onDelete,
 }: {
-  kb: KnowledgeBase
+  kb: KnowledgeBaseSummary
   onRename: () => void
   onDelete: () => void
 }) {
@@ -75,10 +85,19 @@ export default function KnowledgeBasesPage() {
   const { isKbStarred, toggleKb } = useWorkspace()
   const { log } = useActivity()
   const { limits, isFree } = usePlan()
-  const [kbs, setKbs] = useState<KnowledgeBase[]>(mockKnowledgeBases)
+  const [kbs, setKbs] = useState<KnowledgeBaseSummary[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [upgradeOpen, setUpgradeOpen] = useState(false)
   const atKbLimit = isFree && kbs.length >= limits.knowledgeBases
+
+  useEffect(() => {
+    listKnowledgeBases()
+      .then(setKbs)
+      .catch((err) => setError(friendlyError(err, 'Could not load your Knowledge Bases.')))
+      .finally(() => setLoading(false))
+  }, [])
 
   function requestCreate() {
     if (atKbLimit) {
@@ -88,33 +107,34 @@ export default function KnowledgeBasesPage() {
     setCreateOpen(true)
   }
 
-  function createKb(name: string, description: string) {
-    const kb: KnowledgeBase = {
-      id: `kb_${Date.now()}`,
-      name,
-      description: description || 'No description yet.',
-      documents: 0,
-      chunks: 0,
-      questions: 0,
-      members: ['You'],
-      updatedAt: new Date().toISOString(),
-    }
+  async function createKb(name: string, description: string) {
+    const kb = await createKnowledgeBase(name, description)
     setKbs((k) => [kb, ...k])
     log('kb_created', `Created the ${name} Knowledge Base`)
     toast('ok', `Created "${name}".`)
   }
 
-  function renameKb(kb: KnowledgeBase) {
+  async function renameKb(kb: KnowledgeBaseSummary) {
     const name = window.prompt('Rename knowledge base', kb.name)
     if (!name?.trim() || name.trim() === kb.name) return
-    setKbs((k) => k.map((x) => (x.id === kb.id ? { ...x, name: name.trim() } : x)))
-    toast('ok', 'Renamed.')
+    try {
+      const updated = await updateKnowledgeBase(kb.id, { name: name.trim() })
+      setKbs((k) => k.map((x) => (x.id === kb.id ? updated : x)))
+      toast('ok', 'Renamed.')
+    } catch (err) {
+      toast('err', friendlyError(err, 'Could not rename this Knowledge Base.'))
+    }
   }
 
-  function deleteKb(kb: KnowledgeBase) {
+  async function deleteKb(kb: KnowledgeBaseSummary) {
     if (!window.confirm(`Delete "${kb.name}"? This cannot be undone.`)) return
-    setKbs((k) => k.filter((x) => x.id !== kb.id))
-    toast('ok', `Deleted "${kb.name}".`)
+    try {
+      await deleteKnowledgeBase(kb.id)
+      setKbs((k) => k.filter((x) => x.id !== kb.id))
+      toast('ok', `Deleted "${kb.name}".`)
+    } catch (err) {
+      toast('err', friendlyError(err, 'Could not delete this Knowledge Base.'))
+    }
   }
 
   return (
@@ -123,7 +143,7 @@ export default function KnowledgeBasesPage() {
         <div>
           <h3 style={{ margin: 0 }}>Knowledge Bases</h3>
           <p className="muted" style={{ margin: 0, fontSize: '0.85rem' }}>
-            {kbs.length} knowledge base{kbs.length === 1 ? '' : 's'} in this workspace
+            {kbs.length} knowledge base{kbs.length === 1 ? '' : 's'}
           </p>
         </div>
         <button className="btn btn--primary" onClick={requestCreate}>
@@ -142,7 +162,19 @@ export default function KnowledgeBasesPage() {
         </span>
       )}
 
-      {kbs.length === 0 ? (
+      {loading ? (
+        <div className="state">
+          <span className="spinner" />
+        </div>
+      ) : error ? (
+        <div className="state state--error">
+          <span className="state__icon">
+            <Database />
+          </span>
+          <h3>Couldn't load your Knowledge Bases</h3>
+          <p className="muted">{error}</p>
+        </div>
+      ) : kbs.length === 0 ? (
         <div className="state">
           <span className="state__icon">
             <Database />
@@ -165,7 +197,7 @@ export default function KnowledgeBasesPage() {
                 <div className="grow" style={{ minWidth: 0 }}>
                   <h4 className="truncate">{kb.name}</h4>
                   <p className="muted truncate" style={{ fontSize: '0.82rem', margin: 0 }}>
-                    {kb.description}
+                    {kb.description || 'No description yet.'}
                   </p>
                 </div>
                 <button
@@ -191,20 +223,10 @@ export default function KnowledgeBasesPage() {
                   <Boxes size={14} />
                   <span>{formatNumber(kb.chunks)} chunks</span>
                 </div>
-                <div>
-                  <MessageSquare size={14} />
-                  <span>{formatNumber(kb.questions)} questions</span>
-                </div>
               </div>
 
               <div className="kb-card__foot">
-                <div className="avatar-stack">
-                  {kb.members.slice(0, 3).map((m) => (
-                    <span key={m} className="avatar avatar--sm" title={m}>
-                      {m.split(' ').map((p) => p[0]).slice(0, 2).join('')}
-                    </span>
-                  ))}
-                </div>
+                {kb.role !== 'Owner' && <span className="pill">{kb.role}</span>}
                 <span className="list__meta">Updated {relativeTime(kb.updatedAt)}</span>
               </div>
             </article>

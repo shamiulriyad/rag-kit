@@ -6,17 +6,21 @@ import { Field, Input, Textarea } from '../ui/Field'
 interface Props {
   open: boolean
   onClose: () => void
-  onCreate: (name: string, description: string) => void
+  onCreate: (name: string, description: string) => Promise<void> | void
 }
 
 export default function CreateKbModal({ open, onClose, onCreate }: Props) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setName('')
     setDescription('')
+    setError(null)
+    setBusy(false)
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -24,10 +28,18 @@ export default function CreateKbModal({ open, onClose, onCreate }: Props) {
 
   if (!open) return null
 
-  function submit() {
+  async function submit() {
     if (!name.trim()) return
-    onCreate(name.trim(), description.trim())
-    onClose()
+    setBusy(true)
+    setError(null)
+    try {
+      await onCreate(name.trim(), description.trim())
+      onClose()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create the Knowledge Base.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -80,11 +92,17 @@ export default function CreateKbModal({ open, onClose, onCreate }: Props) {
           </Field>
         </div>
 
+        {error && (
+          <p className="field__error" style={{ width: '100%' }}>
+            {error}
+          </p>
+        )}
+
         <div className="modal__actions">
-          <Button block disabled={!name.trim()} onClick={submit}>
+          <Button block disabled={!name.trim()} loading={busy} onClick={submit}>
             Create Knowledge Base
           </Button>
-          <Button variant="ghost" block onClick={onClose}>
+          <Button variant="ghost" block onClick={onClose} disabled={busy}>
             Cancel
           </Button>
         </div>
