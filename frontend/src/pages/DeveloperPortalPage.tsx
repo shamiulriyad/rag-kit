@@ -1,10 +1,11 @@
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { KeyRound, Plus, Trash2, BookOpen, Webhook, PackageOpen, Terminal } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { useToast } from '../components/ui/Toast'
 import { GithubIcon } from '../components/ui/icons'
 import { useLocalStorage } from '../lib/hooks'
-import { questionsThisMonth } from '../lib/mockData'
+import { getUsage } from '../services/api'
 import { formatNumber } from '../lib/format'
 
 interface ApiKey {
@@ -23,6 +24,12 @@ function genKey() {
 }
 
 export default function DeveloperPortalPage() {
+  const [questionsThisMonth, setQuestionsThisMonth] = useState(0)
+  useEffect(() => {
+    getUsage()
+      .then((u) => setQuestionsThisMonth(u.questionsThisMonth))
+      .catch(() => {})
+  }, [])
   const toast = useToast()
   const [keys, setKeys] = useLocalStorage<ApiKey[]>('rag-starter.dev.keys', [])
 
