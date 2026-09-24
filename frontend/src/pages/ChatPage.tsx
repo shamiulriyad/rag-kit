@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import {
   ArrowUp,
@@ -13,9 +13,19 @@ import {
 } from 'lucide-react'
 import { Select } from '../components/ui/Field'
 import { Markdown } from '../lib/markdown'
-import { askQuestion, type Source } from '../services/api'
-import { mockDocuments, sampleAnswer, sampleSources, suggestedPrompts } from '../lib/mockData'
-import { mockKnowledgeBases, mockConversations } from '../lib/appData'
+import {
+  ApiError,
+  askInSession,
+  createChatSession,
+  getChatSession,
+  listChatSessions,
+  listKnowledgeBases,
+  type ChatSessionSummary,
+  type ChatSourceDto,
+  type KnowledgeBaseSummary,
+  type Source,
+} from '../services/api'
+import { suggestedPrompts } from '../lib/mockData'
 import { relativeTime } from '../lib/format'
 import { useActivity } from '../lib/activity'
 import { useWorkspace } from '../lib/workspace'
@@ -65,11 +75,19 @@ function CopyButton({ text }: { text: string }) {
   )
 }
 
+const toSource = (s: ChatSourceDto): Source => ({
+  document: s.documentName ?? 'document',
+  page: s.page,
+  score: s.relevanceScore,
+})
+
 export default function ChatPage() {
   const { log } = useActivity()
   const { togglePin, isPinned } = useWorkspace()
   const [params, setParams] = useSearchParams()
-  const [kbScope, setKbScope] = useState<string>(params.get('kb') ?? 'all')
+  const [kbs, setKbs] = useState<KnowledgeBaseSummary[]>([])
+  const [sessions, setSessions] = useState<ChatSessionSummary[]>([])
+  const [kbScope, setKbScope] = useState<string>(params.get('kb') ?? '')
   const [turns, setTurns] = useState<ChatTurn[]>([])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
@@ -80,27 +98,48 @@ export default function ChatPage() {
 
   const firstQuestion = turns.find((t) => t.role === 'user')?.text ?? ''
 
-  const scopedDocs = useMemo(
-    () =>
-      mockDocuments.filter(
-        (d) => d.status === 'ready' && (kbScope === 'all' || d.knowledgeBaseId === kbScope),
-      ),
-    [kbScope],
-  )
-
   const lastAiTurn = [...turns].reverse().find((t) => t.role === 'ai' && !t.error)
 
   useEffect(() => {
-    const convParam = params.get('conversation')
-    if (!convParam) return
-    const conv = mockConversations.find((c) => c.id === convParam)
-    if (conv) {
-      setKbScope(conv.knowledgeBaseId)
-      setConvId(conv.id)
-      setContinuing(conv.title)
+    let cancelled = false
+    Promise.all([listKnowledgeBases(), listChatSessions()])
+      .then(([kbList, sessionList]) => {
+        if (cancelled) return
+        setKbs(kbList)
+        setSessions(sessionList)
+        setKbScope((cur) => (cur && kbList.some((k) => k.id === cur) ? cur : (kbList[0]?.id ?? '')))
+        const convParam = params.get('conversation')
+        const conv = convParam ? sessionList.find((c) => c.id === convParam) : undefined
+        if (conv) openSession(conv)
+      })
+      .catch(() => {
+        // Not signed in / API down - the composer reports the error when a question is sent.
+      })
+    return () => {
+      cancelled = true
     }
-    // Only consume the param once on mount.
+    // Only load once on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  async function openSession(c: ChatSessionSummary) {
+    setKbScope(c.knowledgeBaseId)
+    setConvId(c.id)
+    setContinuing(c.title)
+    try {
+      const { messages } = await getChatSession(c.id)
+      setTurns(
+        messages.map((m) => ({
+          id: m.id,
+          role: m.role.toLowerCase() === 'user' ? 'user' : 'ai',
+          text: m.content,
+          sources: m.sources.map(toSource),
+        })),
+      )
+    } catch {
+      setTurns([])
+    }
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
@@ -126,9 +165,12 @@ export default function ChatPage() {
     setInput('')
     if (taRef.current) taRef.current.style.height = 'auto'
 
-    if (turns.length === 0 && !convId) {
-      setConvId(`cv_${Date.now()}`)
-      log('conversation', `Started a conversation: "${q.slice(0, 60)}${q.length > 60 ? '…' : ''}"`)
+    if (!kbScope) {
+      setTurns((t) => [
+        ...t,
+        { id: `a${Date.now()}`, role: 'ai', text: 'Create a Knowledge Base and upload a PDF first.', error: true },
+      ])
+      return
     }
 
     const userTurn: ChatTurn = { id: `u${Date.now()}`, role: 'user', text: q }
@@ -136,31 +178,22 @@ export default function ChatPage() {
     setBusy(true)
 
     try {
-      const res = await askQuestion(q, {
-        documentId: scopedDocs.length === 1 ? scopedDocs[0].id : undefined,
-      })
+      let sessionId = convId
+      if (!sessionId) {
+        const created = await createChatSession(kbScope)
+        sessionId = created.id
+        setConvId(sessionId)
+        log('conversation', `Started a conversation: "${q.slice(0, 60)}${q.length > 60 ? '…' : ''}"`)
+      }
+      const res = await askInSession(sessionId, q)
       setTurns((t) => [
         ...t,
-        { id: `a${Date.now()}`, role: 'ai', text: res.answer, sources: res.sources },
+        { id: res.messageId, role: 'ai', text: res.answer, sources: res.sources.map(toSource) },
       ])
+      listChatSessions().then(setSessions).catch(() => {})
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Request failed'
-      const unreachable = /reach the backend/i.test(message)
-      if (unreachable) {
-        setTurns((t) => [
-          ...t,
-          {
-            id: `a${Date.now()}`,
-            role: 'ai',
-            text:
-              sampleAnswer +
-              '\n\n_(Demo response — the .NET API was unreachable, so this answer is not grounded in live retrieval.)_',
-            sources: sampleSources,
-          },
-        ])
-      } else {
-        setTurns((t) => [...t, { id: `a${Date.now()}`, role: 'ai', text: message, error: true }])
-      }
+      const message = err instanceof ApiError || err instanceof Error ? err.message : 'Request failed'
+      setTurns((t) => [...t, { id: `a${Date.now()}`, role: 'ai', text: message, error: true }])
     } finally {
       setBusy(false)
     }
@@ -186,10 +219,8 @@ export default function ChatPage() {
             newConversation()
           }}
         >
-          <option value="all">
-            All Knowledge Bases ({mockDocuments.filter((d) => d.status === 'ready').length})
-          </option>
-          {mockKnowledgeBases.map((kb) => (
+          {kbs.length === 0 && <option value="">No knowledge bases yet</option>}
+          {kbs.map((kb) => (
             <option key={kb.id} value={kb.id}>
               {kb.name}
             </option>
@@ -205,18 +236,13 @@ export default function ChatPage() {
           Conversations
         </div>
         <div className="convlist">
-          {mockConversations
-            .filter((c) => kbScope === 'all' || c.knowledgeBaseId === kbScope)
+          {sessions
+            .filter((c) => c.knowledgeBaseId === kbScope)
             .map((c) => (
               <button
                 key={c.id}
                 className={`convlist__item${convId === c.id ? ' is-active' : ''}`}
-                onClick={() => {
-                  setKbScope(c.knowledgeBaseId)
-                  setConvId(c.id)
-                  setContinuing(c.title)
-                  setTurns([])
-                }}
+                onClick={() => openSession(c)}
               >
                 <MessagesSquare size={14} />
                 <span className="truncate">{c.title}</span>
@@ -230,7 +256,7 @@ export default function ChatPage() {
         <div className="chat__bar">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
             <span className="truncate" style={{ fontWeight: 600 }}>
-              {continuing ? `Continuing: ${continuing}` : kbScope === 'all' ? 'All Knowledge Bases' : mockKnowledgeBases.find((k) => k.id === kbScope)?.name}
+              {continuing ? `Continuing: ${continuing}` : (kbs.find((k) => k.id === kbScope)?.name ?? 'Knowledge Base')}
             </span>
           </div>
           {!empty && (
