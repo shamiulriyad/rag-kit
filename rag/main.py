@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 import config
@@ -177,7 +178,10 @@ async def ingest(
             raise HTTPException(status_code=400, detail="Empty request body - no PDF received.")
 
         _ensure_ready()
-        result = ingest_document(
+        # Blocking (PDF parse + embeddings + Qdrant) - keep it off the event loop so
+        # /health and /query stay responsive during a long ingest.
+        result = await run_in_threadpool(
+            ingest_document,
             collection_name=collection,
             document_id=document_id,
             pdf_path=tmp_path,
