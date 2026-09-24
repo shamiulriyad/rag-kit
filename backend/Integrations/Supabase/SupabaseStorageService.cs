@@ -17,10 +17,19 @@ public class SupabaseStorageService : IStorageService
         _options = options.Value;
         _log = log;
 
-        http.BaseAddress = new Uri(_options.Url.TrimEnd('/') + "/");
+        http.BaseAddress = new Uri(NormalizeUrl(_options.Url).TrimEnd('/') + "/");
         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _options.ServiceRoleKey);
         http.DefaultRequestHeaders.Add("apikey", _options.ServiceRoleKey);
         _http = http;
+    }
+
+    /// <summary>The API lives at https://&lt;project-ref&gt;.supabase.co. A common mistake is pasting the
+    /// dashboard link (https://supabase.com/dashboard/project/&lt;ref&gt;) instead - it answers 200 with an
+    /// HTML page, so uploads "succeed" and later downloads return HTML instead of the PDF.</summary>
+    internal static string NormalizeUrl(string url)
+    {
+        var m = System.Text.RegularExpressions.Regex.Match(url, @"supabase\.com/dashboard/project/([a-z0-9]+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return m.Success ? $"https://{m.Groups[1].Value}.supabase.co" : url;
     }
 
     public async Task<string> UploadAsync(string path, Stream content, string contentType, CancellationToken ct)
