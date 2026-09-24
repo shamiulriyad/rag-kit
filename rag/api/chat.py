@@ -15,6 +15,7 @@ from rag.step10_generate import generate_answer
 # Gemini tags claims with [S1], [S2]... (sometimes back-to-back) - strip them from the
 # prose; the same information is returned structured in `sources`.
 _MARKER_RE = re.compile(r"[ \t]*(?:\[S\d+\])+")
+_CITED_RE = re.compile(r"\[S(\d+)\]")
 
 
 class KnowledgeBaseNotIndexedError(ValueError):
@@ -31,19 +32,24 @@ def answer_question(
 ) -> Dict:
     index_meta.check_before_query(collection_name)                       # model still matches the index?
 
-    if not collection_exists(collection_name):
-        raise KnowledgeBaseNotIndexedError(
-            "This Knowledge Base has no indexed documents yet. Upload a PDF first."
-        )
+    scored_docs = []
+    # A Knowledge Base with no documents yet can still chat (greetings etc.); the model is
+    # told nothing was found and says so for real questions.
+    if collection_exists(collection_name):
+        store = get_vector_store(embeddings, collection_name)
+        query_vector = embed_question(embeddings, question)             # 8
+        scored_docs = retrieve(store, query_vector, top_k)              # 9
 
-    store = get_vector_store(embeddings, collection_name)
-    query_vector = embed_question(embeddings, question)                 # 8
-    scored_docs = retrieve(store, query_vector, top_k)                  # 9
+        if similarity_threshold is not None:
+            scored_docs = [(doc, score) for doc, score in scored_docs if score >= similarity_threshold]
 
-    if similarity_threshold is not None:
-        scored_docs = [(doc, score) for doc, score in scored_docs if score >= similarity_threshold]
+    raw_answer = generate_answer(question, scored_docs, llm=llm)         # 10
+    answer = strip_markers(raw_answer)
 
-    answer = strip_markers(generate_answer(question, scored_docs, llm=llm))  # 10
+    # Only the chunks the model actually cited are sources - a greeting or a "not covered"
+    # reply cites nothing, so no unrelated passages get attached to it.
+    cited = {int(n) for n in _CITED_RE.findall(raw_answer)}
+    used_docs = [(doc, score) for i, (doc, score) in enumerate(scored_docs, start=1) if i in cited]
 
     sources: List[Dict] = [                                             # 11
         {
@@ -54,6 +60,6 @@ def answer_question(
             "score": float(score),
             "excerpt": doc.page_content[:280],
         }
-        for doc, score in scored_docs
+        for doc, score in used_docs
     ]
     return {"answer": answer, "sources": sources}
