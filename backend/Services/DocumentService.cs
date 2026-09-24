@@ -31,6 +31,9 @@ public class DocumentService : IDocumentService
 {
     private static readonly string[] AllowedExtensions = [".pdf"];
 
+    // Longer than Rag:TimeoutSeconds (600 s) plus the download/DB work around one attempt.
+    private static readonly TimeSpan StaleJobAfter = TimeSpan.FromMinutes(20);
+
     private readonly AppDbContext _db;
     private readonly IResourceAuthorizationService _auth;
     private readonly IPlanLimitService _limits;
@@ -122,7 +125,7 @@ public class DocumentService : IDocumentService
             // Processing happens off the request thread - see BackgroundJobs/DocumentProcessingBackgroundService.
             return Map(document);
         }
-        catch (Exception ex) when (ex is AppException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             document.Status = DocumentStatus.Failed;
             document.ErrorMessage = ex.Message;
@@ -153,7 +156,9 @@ public class DocumentService : IDocumentService
             _log.LogWarning(ex, "Could not delete vectors for document {DocId}", doc.Id);
         }
 
-        kb.DocumentCount = Math.Max(0, kb.DocumentCount - 1);
+        // DocumentCount only includes documents that were successfully processed at least once.
+        if (doc.ProcessedAt is not null)
+            kb.DocumentCount = Math.Max(0, kb.DocumentCount - 1);
         kb.ChunkCount = Math.Max(0, kb.ChunkCount - (doc.ChunkCount ?? 0));
         kb.UpdatedAt = DateTimeOffset.UtcNow;
 
@@ -171,6 +176,12 @@ public class DocumentService : IDocumentService
         if (string.IsNullOrEmpty(doc.StoragePath))
             throw new ValidationAppException("This document has no stored file to reprocess.");
 
+        var active = await _db.DocumentProcessingJobs.AnyAsync(j =>
+            j.DocumentId == doc.Id &&
+            (j.Status == DocumentStatus.Queued || j.Status == DocumentStatus.Processing), ct);
+        if (active)
+            throw new ValidationAppException("This document is already being processed.");
+
         doc.Status = DocumentStatus.Queued;
         doc.ErrorMessage = null;
         doc.UpdatedAt = DateTimeOffset.UtcNow;
@@ -183,6 +194,8 @@ public class DocumentService : IDocumentService
 
     public async Task<Guid?> ClaimNextQueuedJobAsync(CancellationToken ct)
     {
+        await RecoverStaleJobsAsync(ct);
+
         var job = await _db.DocumentProcessingJobs
             .Where(j => j.Status == DocumentStatus.Queued)
             .OrderBy(j => j.CreatedAt)
@@ -195,6 +208,35 @@ public class DocumentService : IDocumentService
         job.UpdatedAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
         return job.Id;
+    }
+
+    /// <summary>A job left in Processing longer than any single attempt can run (backend
+    /// crashed/restarted mid-ingest) is re-queued, or failed once its attempts are used up.</summary>
+    private async Task RecoverStaleJobsAsync(CancellationToken ct)
+    {
+        var cutoff = DateTimeOffset.UtcNow - StaleJobAfter;
+        var stale = await _db.DocumentProcessingJobs
+            .Include(j => j.Document)
+            .Where(j => j.Status == DocumentStatus.Processing && j.UpdatedAt < cutoff)
+            .ToListAsync(ct);
+        if (stale.Count == 0) return;
+
+        foreach (var job in stale)
+        {
+            var retry = job.AttemptCount < job.MaxAttempts;
+            job.Status = retry ? DocumentStatus.Queued : DocumentStatus.Failed;
+            job.ErrorMessage = "Processing was interrupted.";
+            job.UpdatedAt = DateTimeOffset.UtcNow;
+            if (!retry) job.CompletedAt = DateTimeOffset.UtcNow;
+
+            if (job.Document is { } doc)
+            {
+                doc.Status = job.Status;
+                if (!retry) doc.ErrorMessage = job.ErrorMessage;
+                doc.UpdatedAt = DateTimeOffset.UtcNow;
+            }
+        }
+        await _db.SaveChangesAsync(ct);
     }
 
     public async Task ProcessJobAsync(Guid jobId, CancellationToken ct)
@@ -250,7 +292,7 @@ public class DocumentService : IDocumentService
             await _notifications.PushAsync(kb.OwnerId, NotificationType.DocReady,
                 "Document indexed", $"\"{document.FileName}\" finished processing ({result.Pages} pages, {result.Chunks} chunks).", ct);
         }
-        catch (Exception ex) when (ex is RagException or AppException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Only retry genuinely transient failures (RAG service unreachable/timed out, 5xx).
             // A deterministic rejection (e.g. "scanned PDF, OCR required", 4xx) will never
