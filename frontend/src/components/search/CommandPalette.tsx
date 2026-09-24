@@ -16,7 +16,9 @@ import {
 } from 'lucide-react'
 import { useUI } from '../../lib/ui'
 import { useLocalStorage } from '../../lib/hooks'
-import { buildSearchIndex, type SearchDoc } from '../../lib/appData'
+import type { SearchDoc } from '../../lib/appData'
+import { useAuth } from '../../lib/auth'
+import { listChatSessions, listDocuments, listKnowledgeBases } from '../../services/api'
 
 const CATEGORY_ICON = {
   'Knowledge Bases': Database,
@@ -37,12 +39,51 @@ const QUICK_ACTIONS: QuickAction[] = [
 export default function CommandPalette() {
   const { searchOpen, setSearchOpen } = useUI()
   const navigate = useNavigate()
-  const index = useMemo(() => buildSearchIndex(), [])
+  const { user } = useAuth()
+  const [index, setIndex] = useState<SearchDoc[]>([])
+
+  // Build the index from the user's real data each time the palette opens.
+  useEffect(() => {
+    if (!searchOpen || !user) return
+    let cancelled = false
+    Promise.all([listKnowledgeBases(), listChatSessions()])
+      .then(async ([kbs, sessions]) => {
+        const docLists = await Promise.all(kbs.map((k) => listDocuments(k.id).catch(() => [])))
+        if (cancelled) return
+        setIndex([
+          ...kbs.map((k): SearchDoc => ({
+            id: k.id,
+            category: 'Knowledge Bases',
+            title: k.name,
+            subtitle: `${k.documents} docs · ${k.chunks.toLocaleString()} chunks`,
+            to: `/knowledge-bases/${k.id}`,
+          })),
+          ...docLists.flat().map((d): SearchDoc => ({
+            id: d.id,
+            category: 'Documents',
+            title: d.name,
+            subtitle: `${d.pages ?? '—'} pages · ${d.status}`,
+            to: '/documents',
+          })),
+          ...sessions.map((c): SearchDoc => ({
+            id: c.id,
+            category: 'Conversations',
+            title: c.title,
+            subtitle: `${c.knowledgeBaseName} · ${c.messageCount} messages`,
+            to: `/chat?conversation=${c.id}`,
+          })),
+        ])
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [searchOpen, user])
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
   const [recent, setRecent] = useLocalStorage<string[]>(
     'rag-starter.recent-searches',
-    ['present perfect', 'architecture', 'chunk overlap'],
+    [],
   )
   const inputRef = useRef<HTMLInputElement>(null)
 
