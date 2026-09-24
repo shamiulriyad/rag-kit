@@ -1,12 +1,21 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { UserPlus, Trash2, Shield, Crown, User, MailWarning } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Field, Input, Select } from '../components/ui/Field'
 import { useToast } from '../components/ui/Toast'
-import { useLocalStorage } from '../lib/hooks'
 import { usePlan } from '../lib/plan'
-import { mockTeam, type TeamMember } from '../lib/appData'
+import {
+  ApiError,
+  createWorkspace,
+  inviteWorkspaceMember,
+  listWorkspaceMembers,
+  listWorkspaces,
+  removeWorkspaceMember,
+  updateWorkspaceMemberRole,
+  type WorkspaceMember as TeamMember,
+  type WorkspaceSummary,
+} from '../services/api'
 import { initials, relativeTime } from '../lib/format'
 
 const ROLE_ICON = { Owner: Crown, Admin: Shield, Member: User } as const
@@ -15,44 +24,83 @@ export default function TeamPage() {
   const toast = useToast()
   const navigate = useNavigate()
   const { plan } = usePlan()
-  const [members, setMembers] = useLocalStorage<TeamMember[]>(
-    'rag-starter.team-members',
-    mockTeam.members,
-  )
+  const [workspace, setWorkspace] = useState<WorkspaceSummary | null>(null)
+  const [members, setMembers] = useState<TeamMember[]>([])
+  const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState('')
   const [role, setRole] = useState<'Admin' | 'Member'>('Member')
+  const [wsName, setWsName] = useState('')
+
+  const fail = (err: unknown, fallback: string) =>
+    toast('err', err instanceof ApiError ? err.message : fallback)
+
+  useEffect(() => {
+    let cancelled = false
+    listWorkspaces()
+      .then(async (list) => {
+        if (cancelled) return
+        const ws = list[0] ?? null
+        setWorkspace(ws)
+        if (ws) setMembers(await listWorkspaceMembers(ws.id))
+      })
+      .catch(() => {})
+      .finally(() => !cancelled && setLoading(false))
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const active = members.filter((m) => m.status === 'active')
   const pending = members.filter((m) => m.status === 'pending')
 
-  function invite(e: FormEvent) {
+  async function create(e: FormEvent) {
     e.preventDefault()
+    try {
+      const ws = await createWorkspace(wsName.trim())
+      setWorkspace(ws)
+      setMembers(await listWorkspaceMembers(ws.id))
+      toast('ok', 'Team workspace created.')
+    } catch (err) {
+      fail(err, 'Could not create the workspace.')
+    }
+  }
+
+  async function invite(e: FormEvent) {
+    e.preventDefault()
+    if (!workspace) return
     if (!email.includes('@')) {
       toast('err', 'Enter a valid email address.')
       return
     }
-    setMembers((list) => [
-      ...list,
-      {
-        id: `m_${Date.now()}`,
-        name: email.split('@')[0].replace(/[._-]+/g, ' '),
-        email,
-        role,
-        status: 'pending',
-        joinedAt: new Date().toISOString(),
-      },
-    ])
-    toast('ok', `Invitation queued for ${email} (demo — no email sent).`)
-    setEmail('')
+    try {
+      const m = await inviteWorkspaceMember(workspace.id, email.trim(), role)
+      setMembers((list) => [...list, m])
+      toast('ok', m.status === 'active' ? `${m.email} was added to the team.` : `Invitation saved for ${m.email}.`)
+      setEmail('')
+    } catch (err) {
+      fail(err, 'Could not send the invitation.')
+    }
   }
 
-  function remove(id: string) {
-    setMembers((list) => list.filter((m) => m.id !== id))
-    toast('ok', 'Member removed from the team.')
+  async function remove(id: string) {
+    if (!workspace) return
+    try {
+      await removeWorkspaceMember(workspace.id, id)
+      setMembers((list) => list.filter((m) => m.id !== id))
+      toast('ok', 'Member removed from the team.')
+    } catch (err) {
+      fail(err, 'Could not remove this member.')
+    }
   }
 
-  function changeRole(id: string, next: TeamMember['role']) {
-    setMembers((list) => list.map((m) => (m.id === id ? { ...m, role: next } : m)))
+  async function changeRole(id: string, next: TeamMember['role']) {
+    if (!workspace) return
+    try {
+      const updated = await updateWorkspaceMemberRole(workspace.id, id, next)
+      setMembers((list) => list.map((m) => (m.id === id ? updated : m)))
+    } catch (err) {
+      fail(err, 'Could not change the role.')
+    }
   }
 
   return (
@@ -61,19 +109,37 @@ export default function TeamPage() {
         <div className="secret-note">
           <MailWarning />
           <span>
-            Team management is a <strong>Team plan</strong> feature. You're
-            previewing it with sample members —{' '}
+            Team workspaces are a <strong>Team plan</strong> feature.{' '}
             <button className="linklike" onClick={() => navigate('/pricing')}>
-              switch to Team
-            </button>{' '}
-            to manage a real workspace once billing is live.
+              See plans
+            </button>
           </span>
         </div>
       )}
 
+      {loading ? (
+        <p className="muted">Loading team…</p>
+      ) : !workspace ? (
+        <section className="card">
+          <div className="panel-head">
+            <h3>Create your team workspace</h3>
+          </div>
+          <form onSubmit={create} className="stack" style={{ gap: 'var(--sp-4)' }}>
+            <Field label="Workspace name">
+              {(id) => (
+                <Input id={id} placeholder="Acme Team" value={wsName} onChange={(e) => setWsName(e.target.value)} />
+              )}
+            </Field>
+            <Button type="submit" disabled={wsName.trim().length < 2}>
+              Create workspace
+            </Button>
+          </form>
+        </section>
+      ) : (
+        <>
       <section className="card">
         <div className="panel-head">
-          <h3>{mockTeam.name}</h3>
+          <h3>{workspace.name}</h3>
           <span className="badge">
             {active.length} active · {pending.length} pending
           </span>
@@ -125,7 +191,7 @@ export default function TeamPage() {
                         </Select>
                       )}
                     </td>
-                    <td>{relativeTime(m.joinedAt)}</td>
+                    <td>{relativeTime(m.createdAt)}</td>
                     <td style={{ textAlign: 'right' }}>
                       {m.role !== 'Owner' && (
                         <button
@@ -179,8 +245,8 @@ export default function TeamPage() {
               Send invitation
             </Button>
             <span className="field__hint">
-              Email delivery is <strong>Coming Soon</strong> — invitations are
-              tracked locally for now.
+              Email delivery is <strong>Coming Soon</strong>. If the person already has an
+              account they are added right away; otherwise the invitation stays pending.
             </span>
           </form>
         </section>
@@ -205,7 +271,7 @@ export default function TeamPage() {
                       {m.email}
                     </div>
                     <div className="list__meta">
-                      {m.role} · invited {relativeTime(m.joinedAt)}
+                      {m.role} · invited {relativeTime(m.createdAt)}
                     </div>
                   </div>
                   <button
@@ -220,6 +286,8 @@ export default function TeamPage() {
           )}
         </section>
       </div>
+        </>
+      )}
     </div>
   )
 }
