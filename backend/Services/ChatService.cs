@@ -39,17 +39,11 @@ public class ChatService : IChatService
         _activity = activity;
     }
 
-    public async Task<List<ChatSessionResponse>> ListSessionsAsync(Guid userId, CancellationToken ct) =>
-        await SessionSummaries(userId).OrderByDescending(s => s.UpdatedAt).ToListAsync(ct);
+    public Task<List<ChatSessionResponse>> ListSessionsAsync(Guid userId, CancellationToken ct) =>
+        QuerySessionsAsync(userId, null, ct);
 
-    public async Task<List<ChatSessionResponse>> SearchSessionsAsync(Guid userId, string query, CancellationToken ct)
-    {
-        var q = query.Trim();
-        return await SessionSummaries(userId)
-            .Where(s => EF.Functions.ILike(s.Title, $"%{q}%"))
-            .OrderByDescending(s => s.UpdatedAt)
-            .ToListAsync(ct);
-    }
+    public Task<List<ChatSessionResponse>> SearchSessionsAsync(Guid userId, string query, CancellationToken ct) =>
+        QuerySessionsAsync(userId, query.Trim(), ct);
 
     public async Task<ChatSessionDetailResponse> GetSessionAsync(Guid id, Guid userId, CancellationToken ct)
     {
@@ -114,6 +108,11 @@ public class ChatService : IChatService
         await _limits.EnsureCanAskQuestionAsync(userId, ct);
 
         var isFirstMessage = !await _db.ChatMessages.AnyAsync(m => m.ChatSessionId == sessionId, ct);
+        // Still carrying the title we generated from the opening message (so the user has not renamed it).
+        var firstUserMessage = isFirstMessage ? null : await _db.ChatMessages
+            .Where(m => m.ChatSessionId == sessionId && m.Role == ChatRole.User)
+            .OrderBy(m => m.CreatedAt).Select(m => m.Content).FirstOrDefaultAsync(ct);
+        var titleIsAuto = firstUserMessage is not null && session.Title == ShortTitle(firstUserMessage);
 
         _db.ChatMessages.Add(new ChatMessage { ChatSessionId = sessionId, Role = ChatRole.User, Content = request.Question });
         await _db.SaveChangesAsync(ct);
@@ -147,7 +146,12 @@ public class ChatService : IChatService
         _db.ChatSources.AddRange(sources);
 
         if (isFirstMessage)
-            session.Title = request.Question.Length > 60 ? request.Question[..60] + "…" : request.Question;
+            session.Title = ShortTitle(request.Question);
+        // The opener was small talk ("hi"): title the conversation after the first question that
+        // actually drew on the documents, so history stays searchable by topic.
+        else if (titleIsAuto && sources.Count > 0
+                 && !await _db.ChatSources.AnyAsync(x => x.Message!.ChatSessionId == sessionId, ct))
+            session.Title = ShortTitle(request.Question);
         session.UpdatedAt = DateTimeOffset.UtcNow;
 
         await _db.SaveChangesAsync(ct);
@@ -161,10 +165,23 @@ public class ChatService : IChatService
                 s.PageNumber, s.RelevanceScore, s.Excerpt)).ToList());
     }
 
-    private IQueryable<ChatSessionResponse> SessionSummaries(Guid userId) =>
-        _db.ChatSessions.Where(s => s.UserId == userId)
+    // Filter and order on the entity, and only then project into the DTO - EF cannot translate
+    // an OrderBy/Where written against the constructed record.
+    private async Task<List<ChatSessionResponse>> QuerySessionsAsync(Guid userId, string? titleContains, CancellationToken ct)
+    {
+        var sessions = _db.ChatSessions.Where(s => s.UserId == userId);
+        if (!string.IsNullOrEmpty(titleContains))
+            sessions = sessions.Where(s => EF.Functions.ILike(s.Title, $"%{titleContains}%"));
+
+        return await sessions
+            .OrderByDescending(s => s.UpdatedAt)
             .Select(s => new ChatSessionResponse(
-                s.Id, s.KnowledgeBaseId, s.KnowledgeBase!.Name, s.Title, s.Messages.Count, s.CreatedAt, s.UpdatedAt));
+                s.Id, s.KnowledgeBaseId, s.KnowledgeBase!.Name, s.Title, s.Messages.Count, s.CreatedAt, s.UpdatedAt))
+            .ToListAsync(ct);
+    }
+
+    private static string ShortTitle(string question) =>
+        question.Length > 60 ? question[..60] + "…" : question;
 
     private static ChatSessionResponse MapSession(ChatSession s, string kbName, int count) => new(
         s.Id, s.KnowledgeBaseId, kbName, s.Title, count, s.CreatedAt, s.UpdatedAt);
