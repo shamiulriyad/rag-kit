@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CreditCard, ArrowRight, Check, Sparkles, Zap, Users } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { PLANS, usePlan, type PlanId } from '../lib/plan'
 import { formatBytes, formatNumber } from '../lib/format'
-import { mockDocuments, questionsThisMonth } from '../lib/mockData'
+import { getUsage, ApiError, type UsageSummary } from '../services/api'
+import { useToast } from '../components/ui/Toast'
 
 const PLAN_ICON: Record<PlanId, typeof Sparkles> = {
   free: Sparkles,
@@ -13,35 +15,44 @@ const PLAN_ICON: Record<PlanId, typeof Sparkles> = {
 
 export default function BillingPage() {
   const navigate = useNavigate()
+  const toast = useToast()
   const { plan, limits, changePlan } = usePlan()
+  const [usage, setUsage] = useState<UsageSummary | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getUsage()
+      .then((u) => !cancelled && setUsage(u))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [plan])
   const current = PLANS[plan]
   const Icon = PLAN_ICON[plan]
-
-  const usedStorage = mockDocuments.reduce((s, d) => s + d.sizeBytes, 0)
-  const usedChunks = mockDocuments.reduce((s, d) => s + d.chunks, 0)
 
   const meters = [
     {
       label: 'Documents',
-      used: mockDocuments.length,
+      used: usage?.documents ?? 0,
       total: limits.documents,
       fmt: (n: number) => String(n),
     },
     {
       label: 'Chunks',
-      used: usedChunks,
+      used: usage?.chunks ?? 0,
       total: limits.chunks,
       fmt: formatNumber,
     },
     {
       label: 'Questions',
-      used: questionsThisMonth,
+      used: usage?.questionsThisMonth ?? 0,
       total: limits.questionsPerMonth,
       fmt: formatNumber,
     },
     {
       label: 'Storage',
-      used: usedStorage,
+      used: usage?.storageBytes ?? 0,
       total: limits.storageBytes,
       fmt: formatBytes,
     },
@@ -61,8 +72,8 @@ export default function BillingPage() {
       <div className="secret-note">
         <CreditCard />
         <span>
-          Billing is a frontend demo. There is no payment provider, invoice or
-          subscription backend — switching plans updates this browser only.
+          Payments are not connected yet. Switching plans here is a development-only
+          activation - it changes your plan limits but does not charge anything.
         </span>
       </div>
 
@@ -156,9 +167,13 @@ export default function BillingPage() {
                 <Button
                   variant={id === 'pro' ? 'primary' : 'secondary'}
                   block
-                  onClick={() => {
-                    changePlan(id)
-                    navigate('/billing')
+                  onClick={async () => {
+                    try {
+                      await changePlan(id)
+                      toast('ok', `Switched to the ${p.name} plan.`)
+                    } catch (err) {
+                      toast('err', err instanceof ApiError ? err.message : 'Could not change plan.')
+                    }
                   }}
                 >
                   Switch to {p.name}
