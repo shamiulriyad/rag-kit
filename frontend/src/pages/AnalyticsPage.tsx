@@ -1,94 +1,98 @@
-import { MessageSquare, FileText, Database as DatabaseIcon, HardDrive, Info } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { MessageSquare, FileText, Database as DatabaseIcon, HardDrive } from 'lucide-react'
 import BarChart from '../components/app/charts/BarChart'
-import { mockKnowledgeBases } from '../lib/appData'
-import { mockDocuments, questionsThisMonth } from '../lib/mockData'
-import { usePlan } from '../lib/plan'
+import {
+  getAnalyticsOverview,
+  getDocumentsOverTime,
+  getQuestionsOverTime,
+  getUsage,
+  type AnalyticsOverview,
+  type TimeSeriesPoint,
+  type UsageSummary,
+} from '../services/api'
 import { formatBytes, formatNumber } from '../lib/format'
 
-// Deterministic demo series — a real backend would return this from usage logs.
-const QUESTIONS_OVER_TIME = [
-  { label: 'Mon', value: 12 },
-  { label: 'Tue', value: 18 },
-  { label: 'Wed', value: 9 },
-  { label: 'Thu', value: 22 },
-  { label: 'Fri', value: 15 },
-  { label: 'Sat', value: 6 },
-  { label: 'Sun', value: 11 },
-]
+const dayKey = (d: Date) => d.toISOString().slice(0, 10)
 
-const DOCUMENTS_ADDED = [
-  { label: 'Wk 1', value: 1 },
-  { label: 'Wk 2', value: 0 },
-  { label: 'Wk 3', value: 2 },
-  { label: 'Wk 4', value: 0 },
-]
+/** The API may omit days with no activity - fill the gaps so the chart shows zeros. */
+function lastDays(points: TimeSeriesPoint[], days: number) {
+  const byDay = new Map(points.map((p) => [p.date.slice(0, 10), p.count]))
+  const out: { date: Date; value: number }[] = []
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date()
+    d.setDate(d.getDate() - i)
+    out.push({ date: d, value: byDay.get(dayKey(d)) ?? 0 })
+  }
+  return out
+}
 
 export default function AnalyticsPage() {
-  const { limits, isFree } = usePlan()
-  const usageByKb = mockKnowledgeBases.map((kb) => ({ label: kb.name, value: kb.questions }))
-  const storageUsed = mockDocuments.reduce((s, d) => s + d.sizeBytes, 0)
+  const [overview, setOverview] = useState<AnalyticsOverview | null>(null)
+  const [usage, setUsage] = useState<UsageSummary | null>(null)
+  const [questions, setQuestions] = useState<TimeSeriesPoint[]>([])
+  const [documents, setDocuments] = useState<TimeSeriesPoint[]>([])
+  const [loaded, setLoaded] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([
+      getAnalyticsOverview().then(setOverview),
+      getUsage().then(setUsage),
+      getQuestionsOverTime(7).then(setQuestions),
+      getDocumentsOverTime(28).then(setDocuments),
+    ])
+      .catch(() => {})
+      .finally(() => !cancelled && setLoaded(true))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const questionsChart = lastDays(questions, 7).map((p) => ({
+    label: p.date.toLocaleDateString('en-US', { weekday: 'short' }),
+    value: p.value,
+  }))
+
+  const docDays = lastDays(documents, 28)
+  const documentsChart = [0, 1, 2, 3].map((w) => ({
+    label: `Wk ${w + 1}`,
+    value: docDays.slice(w * 7, w * 7 + 7).reduce((s, p) => s + p.value, 0),
+  }))
+
+  const usageByKb = (overview?.mostUsedKnowledgeBases ?? []).map((kb) => ({
+    label: kb.name,
+    value: kb.chunks,
+  }))
+
+  const stats = [
+    { icon: MessageSquare, value: formatNumber(overview?.totalQuestionsThisMonth ?? 0), label: 'Questions this month' },
+    { icon: FileText, value: String(overview?.totalDocuments ?? 0), label: 'Documents' },
+    { icon: HardDrive, value: formatBytes(overview?.storageBytes ?? 0), label: 'Storage used' },
+    { icon: DatabaseIcon, value: String(overview?.totalKnowledgeBases ?? 0), label: 'Knowledge Bases' },
+  ]
 
   return (
     <div className="page">
-      <div className="secret-note">
-        <Info />
-        <span>
-          Analytics shown here are demo data derived from the mock workspace, not live usage
-          logs. Connect the real backend to replace these numbers.
-        </span>
-      </div>
-
       <div className="statgrid">
-        <div className="card stat">
-          <div className="stat__top">
-            <span className="stat__icon">
-              <MessageSquare />
-            </span>
+        {stats.map(({ icon: Icon, value, label }) => (
+          <div className="card stat" key={label}>
+            <div className="stat__top">
+              <span className="stat__icon">
+                <Icon />
+              </span>
+            </div>
+            <div>
+              <div className="stat__value">{value}</div>
+              <div className="stat__label">{label}</div>
+            </div>
           </div>
-          <div>
-            <div className="stat__value">{formatNumber(questionsThisMonth)}</div>
-            <div className="stat__label">Questions this month</div>
-          </div>
-        </div>
-        <div className="card stat">
-          <div className="stat__top">
-            <span className="stat__icon">
-              <FileText />
-            </span>
-          </div>
-          <div>
-            <div className="stat__value">{mockDocuments.length}</div>
-            <div className="stat__label">Documents</div>
-          </div>
-        </div>
-        <div className="card stat">
-          <div className="stat__top">
-            <span className="stat__icon">
-              <HardDrive />
-            </span>
-          </div>
-          <div>
-            <div className="stat__value">{formatBytes(storageUsed)}</div>
-            <div className="stat__label">Storage used</div>
-          </div>
-        </div>
-        <div className="card stat">
-          <div className="stat__top">
-            <span className="stat__icon">
-              <DatabaseIcon />
-            </span>
-          </div>
-          <div>
-            <div className="stat__value">{mockKnowledgeBases.length}</div>
-            <div className="stat__label">Knowledge Bases</div>
-          </div>
-        </div>
+        ))}
       </div>
 
-      {isFree && (
+      {usage && usage.planCode.toLowerCase() === 'free' && (
         <div className="usage-chip">
           <b>
-            {questionsThisMonth} / {limits.questionsPerMonth}
+            {usage.questionsThisMonth} / {usage.maxQuestionsPerMonth}
           </b>{' '}
           questions used this month · Free plan
         </div>
@@ -102,28 +106,34 @@ export default function AnalyticsPage() {
               Last 7 days
             </span>
           </div>
-          <BarChart data={QUESTIONS_OVER_TIME} />
+          <BarChart data={questionsChart} />
         </section>
 
         <section className="card">
           <div className="panel-head">
             <h3>Documents added</h3>
             <span className="muted" style={{ fontSize: '0.78rem' }}>
-              This month
+              Last 4 weeks
             </span>
           </div>
-          <BarChart data={DOCUMENTS_ADDED} />
+          <BarChart data={documentsChart} />
         </section>
       </div>
 
       <section className="card">
         <div className="panel-head">
-          <h3>Usage by Knowledge Base</h3>
+          <h3>Knowledge Bases</h3>
           <span className="muted" style={{ fontSize: '0.78rem' }}>
-            Questions asked
+            Chunks indexed
           </span>
         </div>
-        <BarChart data={usageByKb} height={160} />
+        {loaded && usageByKb.length === 0 ? (
+          <p className="muted" style={{ fontSize: '0.85rem' }}>
+            No Knowledge Bases yet.
+          </p>
+        ) : (
+          <BarChart data={usageByKb} height={160} />
+        )}
       </section>
     </div>
   )
