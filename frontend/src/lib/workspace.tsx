@@ -37,15 +37,10 @@ interface WorkspaceState {
 }
 
 const EMPTY: WorkspaceState = {
-  starredKbs: ['kb_english'],
-  favoriteDocs: ['doc_eng_grammar'],
-  pinnedConversations: [
-    { id: 'cv_present_perfect', title: 'Present perfect vs past simple' },
-  ],
-  tagsByDoc: {
-    doc_eng_grammar: ['Education', 'Important'],
-    doc_platform_spec: ['Programming'],
-  },
+  starredKbs: [],
+  favoriteDocs: [],
+  pinnedConversations: [],
+  tagsByDoc: {},
   customTags: [],
   workspaces: DEFAULT_WORKSPACES,
   currentWorkspaceId: 'ws_personal',
