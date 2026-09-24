@@ -9,6 +9,8 @@ import {
   type KnowledgeBaseSummary,
 } from '../../services/api'
 
+const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export default function FavoritesNav() {
   const { starredKbs, favoriteDocs, pinnedConversations } = useWorkspace()
   const [kbs, setKbs] = useState<KnowledgeBaseSummary[]>([])
@@ -22,7 +24,9 @@ export default function FavoritesNav() {
       return
     }
     let cancelled = false
-    Promise.all(starredKbs.map((id) => getKnowledgeBase(id).catch(() => null))).then((results) => {
+    Promise.all(
+      starredKbs.filter((id) => GUID_RE.test(id)).map((id) => getKnowledgeBase(id).catch(() => null)),
+    ).then((results) => {
       if (!cancelled) setKbs(results.filter((k): k is KnowledgeBaseSummary => k !== null))
     })
     return () => {
@@ -36,7 +40,10 @@ export default function FavoritesNav() {
       return
     }
     let cancelled = false
-    Promise.all(favoriteDocs.map((id) => getDocument(id).catch(() => null))).then((results) => {
+    Promise.all(
+      // Only real (GUID) ids exist on the API; skip leftover sample ids to avoid 404s.
+      favoriteDocs.filter((id) => GUID_RE.test(id)).map((id) => getDocument(id).catch(() => null)),
+    ).then((results) => {
       if (!cancelled) setDocs(results.filter((d): d is DocumentRecord => d !== null))
     })
     return () => {
