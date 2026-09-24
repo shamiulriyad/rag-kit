@@ -1,9 +1,10 @@
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Sparkles, Zap, Users } from 'lucide-react'
 import { Button } from '../ui/Button'
-import { PLANS, usePlan } from '../../lib/plan'
+import { PLANS, type PlanId } from '../../lib/plan'
+import { getUsage, type UsageSummary } from '../../services/api'
 import { formatBytes, formatNumber } from '../../lib/format'
-import { mockDocuments, questionsThisMonth } from '../../lib/mockData'
 
 interface Meter {
   label: string
@@ -14,37 +15,29 @@ interface Meter {
 
 export default function PlanUsageCard() {
   const navigate = useNavigate()
-  const { plan, limits, isFree } = usePlan()
-  const PlanIcon = plan === 'pro' ? Zap : plan === 'team' ? Users : Sparkles
+  const [usage, setUsage] = useState<UsageSummary | null>(null)
 
-  const usedStorage = mockDocuments.reduce((s, d) => s + d.sizeBytes, 0)
-  const usedChunks = mockDocuments.reduce((s, d) => s + d.chunks, 0)
+  useEffect(() => {
+    let cancelled = false
+    getUsage()
+      .then((u) => !cancelled && setUsage(u))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const code = (usage?.planCode ?? 'free').toLowerCase()
+  const plan: PlanId = code === 'pro' || code === 'team' ? code : 'free'
+  const isFree = plan === 'free'
+  const PlanIcon = plan === 'pro' ? Zap : plan === 'team' ? Users : Sparkles
+  const lim = PLANS[plan].limits
 
   const meters: Meter[] = [
-    {
-      label: 'Documents',
-      used: mockDocuments.length,
-      total: limits.documents,
-      render: (n) => String(n),
-    },
-    {
-      label: 'Storage',
-      used: usedStorage,
-      total: limits.storageBytes,
-      render: (n) => formatBytes(n),
-    },
-    {
-      label: 'Chunks',
-      used: usedChunks,
-      total: limits.chunks,
-      render: (n) => formatNumber(n),
-    },
-    {
-      label: 'Questions this month',
-      used: questionsThisMonth,
-      total: limits.questionsPerMonth,
-      render: (n) => formatNumber(n),
-    },
+    { label: 'Documents', used: usage?.documents ?? 0, total: usage?.maxDocuments ?? lim.documents, render: (n) => String(n) },
+    { label: 'Storage', used: usage?.storageBytes ?? 0, total: usage?.maxStorageBytes ?? lim.storageBytes, render: (n) => formatBytes(n) },
+    { label: 'Chunks', used: usage?.chunks ?? 0, total: usage?.maxChunks ?? lim.chunks, render: (n) => formatNumber(n) },
+    { label: 'Questions this month', used: usage?.questionsThisMonth ?? 0, total: usage?.maxQuestionsPerMonth ?? lim.questionsPerMonth, render: (n) => formatNumber(n) },
   ]
 
   return (
@@ -68,7 +61,7 @@ export default function PlanUsageCard() {
 
       <div className="statgrid" style={{ gridTemplateColumns: 'repeat(4, 1fr)' }}>
         {meters.map((m) => {
-          const pct = Math.min(100, Math.round((m.used / m.total) * 100))
+          const pct = m.total > 0 ? Math.min(100, Math.round((m.used / m.total) * 100)) : 0
           const warn = pct >= 80
           return (
             <div className="usage__meter" key={m.label}>
@@ -89,8 +82,7 @@ export default function PlanUsageCard() {
       {isFree && (
         <p className="muted" style={{ fontSize: '0.78rem' }}>
           You're on the Free plan. Upgrade to Pro or Team for more documents,
-          storage, chunks and questions. Billing is not live yet — upgrades here
-          are a demo.
+          storage, chunks and questions.
         </p>
       )}
     </section>
