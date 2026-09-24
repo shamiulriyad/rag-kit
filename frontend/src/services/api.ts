@@ -133,20 +133,76 @@ export function checkHealth(): Promise<Health> {
   return request<Health>('/api/health')
 }
 
-export interface AskOptions {
-  topK?: number
-  /** Optional document scope for the retrieval step; the backend may ignore it. */
-  documentId?: string
+// --- Chat -----------------------------------------------------------------
+// Mirrors backend/DTOs/Chat/ChatDtos.cs. A session belongs to one Knowledge Base;
+// questions are asked inside a session so the exchange is persisted.
+
+export interface ChatSessionSummary {
+  id: string
+  knowledgeBaseId: string
+  knowledgeBaseName: string
+  title: string
+  messageCount: number
+  createdAt: string
+  updatedAt: string
 }
 
-export function askQuestion(
-  question: string,
-  opts: AskOptions = {},
-): Promise<ChatResponse> {
-  return request<ChatResponse>('/api/chat', {
+export interface ChatSourceDto {
+  documentId: string | null
+  documentName: string | null
+  page: number | null
+  relevanceScore: number
+  excerpt: string
+}
+
+export interface ChatMessageDto {
+  id: string
+  role: string
+  content: string
+  createdAt: string
+  sources: ChatSourceDto[]
+}
+
+export interface AskMessageResult {
+  sessionId: string
+  messageId: string
+  answer: string
+  sources: ChatSourceDto[]
+}
+
+export function listChatSessions(): Promise<ChatSessionSummary[]> {
+  return request('/api/chat/sessions')
+}
+
+export function getChatSession(id: string): Promise<{ session: ChatSessionSummary; messages: ChatMessageDto[] }> {
+  return request(`/api/chat/sessions/${id}`)
+}
+
+export function createChatSession(knowledgeBaseId: string, title?: string): Promise<ChatSessionSummary> {
+  return request('/api/chat/sessions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ question, topK: opts.topK, documentId: opts.documentId }),
+    body: JSON.stringify({ knowledgeBaseId, title }),
+  })
+}
+
+export function renameChatSession(id: string, title: string): Promise<ChatSessionSummary> {
+  return request(`/api/chat-history/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title }),
+  })
+}
+
+export function deleteChatSession(id: string): Promise<void> {
+  return request(`/api/chat-history/${id}`, { method: 'DELETE' })
+}
+
+export function askInSession(sessionId: string, question: string, topK?: number): Promise<AskMessageResult> {
+  return request(`/api/chat/sessions/${sessionId}/messages`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, topK }),
   })
 }
 
@@ -321,3 +377,154 @@ export function reprocessDocument(id: string): Promise<DocumentRecord> {
 }
 
 export { BASE_URL }
+
+// --- Analytics / usage / activity / notifications --------------------------
+// Mirror backend/DTOs/Analytics, Billing and the Activity/Notification services.
+
+export interface AnalyticsOverview {
+  totalKnowledgeBases: number
+  totalDocuments: number
+  totalChunks: number
+  totalQuestionsThisMonth: number
+  storageBytes: number
+  mostUsedKnowledgeBases: { id: string; name: string; documents: number; chunks: number }[]
+}
+
+export interface TimeSeriesPoint {
+  date: string
+  count: number
+}
+
+export interface UsageSummary {
+  planCode: string
+  documents: number
+  maxDocuments: number
+  storageBytes: number
+  maxStorageBytes: number
+  chunks: number
+  maxChunks: number
+  questionsThisMonth: number
+  maxQuestionsPerMonth: number
+  knowledgeBases: number
+  maxKnowledgeBases: number
+}
+
+export interface ActivityLogDto {
+  id: string
+  action: string
+  entityType: string
+  entityId: string | null
+  metadata: string | null
+  createdAt: string
+}
+
+export interface NotificationDto {
+  id: string
+  type: string
+  title: string
+  message: string
+  isRead: boolean
+  createdAt: string
+}
+
+export function getAnalyticsOverview(): Promise<AnalyticsOverview> {
+  return request('/api/analytics/overview')
+}
+
+export function getQuestionsOverTime(days = 7): Promise<TimeSeriesPoint[]> {
+  return request(`/api/analytics/questions?days=${days}`)
+}
+
+export function getDocumentsOverTime(days = 28): Promise<TimeSeriesPoint[]> {
+  return request(`/api/analytics/documents?days=${days}`)
+}
+
+export function getUsage(): Promise<UsageSummary> {
+  return request('/api/analytics/usage')
+}
+
+export function listActivity(limit = 100): Promise<ActivityLogDto[]> {
+  return request(`/api/activity?limit=${limit}`)
+}
+
+export function clearActivity(): Promise<void> {
+  return request('/api/activity', { method: 'DELETE' })
+}
+
+export function listNotifications(): Promise<NotificationDto[]> {
+  return request('/api/notifications')
+}
+
+export function markNotificationRead(id: string): Promise<void> {
+  return request(`/api/notifications/${id}/read`, { method: 'PUT' })
+}
+
+export function markAllNotificationsRead(): Promise<void> {
+  return request('/api/notifications/read-all', { method: 'PUT' })
+}
+
+export function getHealthDetail(): Promise<Record<string, string>> {
+  return request('/api/health')
+}
+
+export function activatePlan(planCode: string): Promise<{ planCode: string; status: string }> {
+  return request('/api/billing/mock-activate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ planCode }),
+  })
+}
+
+// --- Workspaces / team (backend/DTOs/Teams/WorkspaceDtos.cs) ----------------
+
+export interface WorkspaceSummary {
+  id: string
+  name: string
+  ownerId: string
+  memberCount: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface WorkspaceMember {
+  id: string
+  name: string
+  email: string
+  role: 'Owner' | 'Admin' | 'Member'
+  status: 'active' | 'pending'
+  createdAt: string
+}
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
+
+export function listWorkspaces(): Promise<WorkspaceSummary[]> {
+  return request('/api/workspaces')
+}
+
+export function createWorkspace(name: string): Promise<WorkspaceSummary> {
+  return request('/api/workspaces', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ name }) })
+}
+
+export function listWorkspaceMembers(id: string): Promise<WorkspaceMember[]> {
+  return request(`/api/workspaces/${id}/members`)
+}
+
+export function inviteWorkspaceMember(id: string, email: string, role: string): Promise<WorkspaceMember> {
+  return request(`/api/workspaces/${id}/members`, {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ email, role }),
+  })
+}
+
+export function updateWorkspaceMemberRole(id: string, memberId: string, role: string): Promise<WorkspaceMember> {
+  return request(`/api/workspaces/${id}/members/${memberId}`, {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ role }),
+  })
+}
+
+export function removeWorkspaceMember(id: string, memberId: string): Promise<void> {
+  return request(`/api/workspaces/${id}/members/${memberId}`, { method: 'DELETE' })
+}
