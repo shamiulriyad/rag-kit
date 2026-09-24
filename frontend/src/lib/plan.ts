@@ -1,8 +1,11 @@
-/* Plans are a frontend-only / demo concept for the MVP. There is no billing
-   backend, no Stripe, no subscription state on a server — the current plan is
-   just a value in localStorage so the upgrade UX can be demonstrated. */
+/* The signed-in user's plan comes from the backend (/api/analytics/usage), which is
+   also what enforces the limits. Signed-out visitors (marketing pages) fall back to
+   a value in localStorage. There is no payment provider yet - switching plans calls
+   the backend's dev-only mock activation. */
 
 import { useCallback, useEffect, useState } from 'react'
+import { useAuth } from './auth'
+import { activatePlan, getUsage } from '../services/api'
 
 export type PlanId = 'free' | 'pro' | 'team'
 
@@ -126,26 +129,53 @@ export const YEARLY_SAVING_PCT = 17 // Pro 120 vs 144, Team 290 vs 348  →  ~17
 
 const STORAGE_KEY = 'rag-starter.plan'
 
+function asPlanId(code: string | undefined): PlanId | null {
+  const c = code?.toLowerCase()
+  return c === 'free' || c === 'pro' || c === 'team' ? c : null
+}
+
 export function usePlan() {
+  const { user } = useAuth()
+  const userId = user?.id ?? null
   const [plan, setPlan] = useState<PlanId>('free')
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw === 'pro' || raw === 'free' || raw === 'team') setPlan(raw)
-    } catch {
-      /* storage unavailable — stay on free */
+    if (userId) {
+      let cancelled = false
+      getUsage()
+        .then((u) => {
+          const id = asPlanId(u.planCode)
+          if (!cancelled && id) setPlan(id)
+        })
+        .catch(() => {})
+      return () => {
+        cancelled = true
+      }
     }
-  }, [])
+    try {
+      const saved = asPlanId(localStorage.getItem(STORAGE_KEY) ?? undefined)
+      if (saved) setPlan(saved)
+    } catch {
+      /* storage unavailable - stay on free */
+    }
+  }, [userId])
 
-  const changePlan = useCallback((next: PlanId) => {
-    setPlan(next)
-    try {
-      localStorage.setItem(STORAGE_KEY, next)
-    } catch {
-      /* ignore */
-    }
-  }, [])
+  const changePlan = useCallback(
+    async (next: PlanId) => {
+      if (userId) {
+        await activatePlan(next)
+        setPlan(next)
+        return
+      }
+      setPlan(next)
+      try {
+        localStorage.setItem(STORAGE_KEY, next)
+      } catch {
+        /* ignore */
+      }
+    },
+    [userId],
+  )
 
   return {
     plan,
