@@ -68,5 +68,5 @@ public class KnowledgeBasesController : ApiControllerBase
     /// service. The size ceiling is enforced globally by Kestrel/FormOptions (Upload:MaxBytes).</summary>
     [HttpPost("{id:guid}/documents")]
     public async Task<ActionResult> Upload(Guid id, IFormFile file, CancellationToken ct) =>
-        Success(await _documents.UploadAsync(id, CurrentUserId, file, ct), "Document uploaded and indexed.");
+        Success(await _documents.UploadAsync(id, CurrentUserId, file, ct), "Document uploaded. Indexing has started.");
 }
