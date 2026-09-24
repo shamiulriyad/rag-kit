@@ -4,7 +4,6 @@ import {
   FileText,
   Boxes,
   MessageSquare,
-  Quote,
   Upload,
   Sparkles,
   Settings2,
@@ -21,14 +20,17 @@ import PlanUsageCard from '../components/app/PlanUsageCard'
 import CreateKbModal from '../components/app/CreateKbModal'
 import { useToast } from '../components/ui/Toast'
 import {
-  checkHealth,
   createKnowledgeBase,
+  getAnalyticsOverview,
+  getHealthDetail,
+  listChatSessions,
   listDocuments,
   listKnowledgeBases,
+  type AnalyticsOverview,
+  type ChatSessionSummary,
   type DocumentRecord,
   type KnowledgeBaseSummary,
 } from '../services/api'
-import { mockQuestions, systemHealth } from '../lib/mockData'
 import { type ActivityType } from '../lib/appData'
 import { formatNumber, relativeTime } from '../lib/format'
 import { useWorkspace } from '../lib/workspace'
@@ -52,11 +54,19 @@ export default function DashboardPage() {
   const [createKbOpen, setCreateKbOpen] = useState(false)
   const [kbs, setKbs] = useState<KnowledgeBaseSummary[]>([])
   const [docs, setDocs] = useState<DocumentRecord[]>([])
+  const [overview, setOverview] = useState<AnalyticsOverview | null>(null)
+  const [sessions, setSessions] = useState<ChatSessionSummary[]>([])
+  const [health, setHealth] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    checkHealth()
-      .then(() => setApiOnline(true))
+    getHealthDetail()
+      .then((h) => {
+        setHealth(h)
+        setApiOnline(true)
+      })
       .catch(() => setApiOnline(false))
+    getAnalyticsOverview().then(setOverview).catch(() => {})
+    listChatSessions().then(setSessions).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -71,8 +81,18 @@ export default function DashboardPage() {
       })
   }, [])
 
-  const totalChunks = docs.reduce((s, d) => s + (d.chunks ?? 0), 0)
-  const totalSources = mockQuestions.reduce((s, q) => s + q.sources, 0)
+  const totalChunks = overview?.totalChunks ?? docs.reduce((s, d) => s + (d.chunks ?? 0), 0)
+  const recentSessions = [...sessions]
+    .sort((a, b) => +new Date(b.updatedAt) - +new Date(a.updatedAt))
+    .slice(0, 4)
+  const healthRows = [
+    { key: 'api', name: 'ASP.NET Core API' },
+    { key: 'database', name: 'Database' },
+    { key: 'storage', name: 'File storage' },
+    { key: 'rag', name: 'Python RAG service' },
+    { key: 'qdrant', name: 'Qdrant vector store' },
+    { key: 'llm', name: 'Gemini API' },
+  ]
   const recentDocs = [...docs]
     .sort((a, b) => +new Date(b.uploadedAt) - +new Date(a.uploadedAt))
     .slice(0, 4)
@@ -80,20 +100,14 @@ export default function DashboardPage() {
   return (
     <div className="page">
       <div className="statgrid">
-        <StatCard icon={FileText} value={String(docs.length)} label="Documents indexed" />
+        <StatCard icon={FileText} value={String(overview?.totalDocuments ?? docs.length)} label="Documents indexed" />
         <StatCard icon={Boxes} value={formatNumber(totalChunks)} label="Chunks in Qdrant" />
         <StatCard
           icon={MessageSquare}
-          value="128"
-          label="Questions asked"
-          delta={{ text: 'demo data', trend: 'flat' }}
+          value={formatNumber(overview?.totalQuestionsThisMonth ?? 0)}
+          label="Questions this month"
         />
-        <StatCard
-          icon={Quote}
-          value={String(totalSources * 34)}
-          label="Sources cited"
-          delta={{ text: 'demo data', trend: 'flat' }}
-        />
+        <StatCard icon={Database} value={String(overview?.totalKnowledgeBases ?? kbs.length)} label="Knowledge Bases" />
       </div>
 
       <PlanUsageCard />
@@ -138,20 +152,24 @@ export default function DashboardPage() {
                   ? 'Checking…'
                   : apiOnline
                     ? 'API reachable'
-                    : 'API offline · demo data'
+                    : 'API offline'
               }
             />
           </div>
           <div className="list">
-            {systemHealth.map((s) => (
-              <div className="health__row" key={s.name}>
-                <div>
-                  <div>{s.name}</div>
-                  <div className="list__meta">{s.detail}</div>
+            {healthRows.map((r) => {
+              const state = health[r.key]
+              const up = state === 'healthy'
+              return (
+                <div className="health__row" key={r.key}>
+                  <div>
+                    <div>{r.name}</div>
+                    <div className="list__meta">{state ?? 'unknown'}</div>
+                  </div>
+                  <StatusPill status={up ? 'ok' : 'failed'} label={up ? undefined : 'Down'} />
                 </div>
-                <StatusPill status="ok" />
-              </div>
-            ))}
+              )
+            })}
           </div>
         </section>
       </div>
@@ -159,7 +177,7 @@ export default function DashboardPage() {
       <div className="grid-2">
         <section className="card">
           <div className="panel-head">
-            <h3>Recent questions</h3>
+            <h3>Recent conversations</h3>
             <button
               className="btn btn--ghost btn--sm"
               onClick={() => navigate('/chat')}
@@ -168,21 +186,31 @@ export default function DashboardPage() {
             </button>
           </div>
           <div className="list">
-            {mockQuestions.map((q) => (
-              <div className="list__row" key={q.id}>
+            {recentSessions.map((c) => (
+              <div
+                className="list__row"
+                key={c.id}
+                style={{ cursor: 'pointer' }}
+                onClick={() => navigate(`/chat?conversation=${c.id}`)}
+              >
                 <span className="list__icon">
                   <MessageSquare />
                 </span>
                 <div className="grow" style={{ minWidth: 0 }}>
                   <div className="truncate" style={{ color: 'var(--text)' }}>
-                    {q.question}
+                    {c.title}
                   </div>
                   <div className="list__meta">
-                    {q.document} · {q.sources} sources · {relativeTime(q.askedAt)}
+                    {c.knowledgeBaseName} · {c.messageCount} messages · {relativeTime(c.updatedAt)}
                   </div>
                 </div>
               </div>
             ))}
+            {recentSessions.length === 0 && (
+              <p className="muted" style={{ fontSize: '0.85rem' }}>
+                No questions asked yet.
+              </p>
+            )}
           </div>
         </section>
 
