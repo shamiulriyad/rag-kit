@@ -15,6 +15,10 @@ public interface IRagService
 {
     Task<bool> IsHealthyAsync(CancellationToken ct = default);
 
+    /// <summary>The Python service's own /health body - the only source of truth for Qdrant and
+    /// model readiness, since the .NET side never talks to them directly.</summary>
+    Task<RagHealth> GetHealthAsync(CancellationToken ct = default);
+
     Task<RagIngestResult> IngestAsync(
         string collectionName, Guid documentId, Stream pdf, string fileName,
         int chunkSize, int chunkOverlap, CancellationToken ct = default);
@@ -26,6 +30,9 @@ public interface IRagService
 
     Task DeleteCollectionAsync(string collectionName, CancellationToken ct = default);
 }
+
+/// <summary>Reachable = the HTTP call worked; Ready = models loaded; Qdrant = "ok"/"down"/null (unknown).</summary>
+public record RagHealth(bool Reachable, bool Ready, string? Qdrant);
 
 /// <summary>Raised when the Python RAG service returns an error or cannot be reached.</summary>
 public class RagException : Exception
@@ -47,6 +54,25 @@ public class RagService : IRagService
     {
         _http = http;
         _log = log;
+    }
+
+    public async Task<RagHealth> GetHealthAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            using var res = await _http.GetAsync("/health", ct);
+            if (!res.IsSuccessStatusCode) return new RagHealth(false, false, null);
+            using var doc = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+            var root = doc.RootElement;
+            var ready = root.TryGetProperty("ready", out var r) && r.ValueKind == JsonValueKind.True;
+            var qdrant = root.TryGetProperty("qdrant", out var q) && q.ValueKind == JsonValueKind.String ? q.GetString() : null;
+            return new RagHealth(true, ready, qdrant);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogWarning(ex, "Python RAG service health check failed");
+            return new RagHealth(false, false, null);
+        }
     }
 
     public async Task<bool> IsHealthyAsync(CancellationToken ct = default)
