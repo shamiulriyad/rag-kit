@@ -12,7 +12,6 @@ import {
   Plus,
   Upload,
   CreditCard,
-  FlaskConical,
 } from 'lucide-react'
 import { useUI } from '../../lib/ui'
 import { useLocalStorage } from '../../lib/hooks'
@@ -32,7 +31,6 @@ type QuickAction = { label: string; hint: string; to: string; icon: typeof Plus 
 const QUICK_ACTIONS: QuickAction[] = [
   { label: 'New chat', hint: 'Ctrl N', to: '/chat', icon: Plus },
   { label: 'Upload a document', hint: 'Ctrl U', to: '/documents', icon: Upload },
-  { label: 'Open RAG Playground', hint: '', to: '/playground', icon: FlaskConical },
   { label: 'View billing & usage', hint: '', to: '/billing', icon: CreditCard },
 ]
 
