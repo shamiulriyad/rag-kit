@@ -6,6 +6,7 @@ import { PLANS, usePlan, type PlanId } from '../lib/plan'
 import { formatBytes, formatNumber } from '../lib/format'
 import { getUsage, ApiError, type UsageSummary } from '../services/api'
 import { useToast } from '../components/ui/Toast'
+import { useCheckout } from '../components/app/Checkout'
 
 const PLAN_ICON: Record<PlanId, typeof Sparkles> = {
   free: Sparkles,
@@ -17,6 +18,7 @@ export default function BillingPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const { plan, limits, changePlan } = usePlan()
+  const checkout = useCheckout()
   const [usage, setUsage] = useState<UsageSummary | null>(null)
 
   useEffect(() => {
@@ -72,8 +74,8 @@ export default function BillingPage() {
       <div className="secret-note">
         <CreditCard />
         <span>
-          Payments are not connected yet. Switching plans here is a development-only
-          activation - it changes your plan limits but does not charge anything.
+          No payment gateway is connected yet. The checkout (card, bKash, Nagad, Rocket)
+          is a demo: it changes your plan limits but does not charge anything.
         </span>
       </div>
 
@@ -167,14 +169,18 @@ export default function BillingPage() {
                 <Button
                   variant={id === 'pro' ? 'primary' : 'secondary'}
                   block
-                  onClick={async () => {
-                    try {
-                      await changePlan(id)
+                  onClick={() =>
+                    checkout.open(id, async () => {
+                      try {
+                        await changePlan(id)
+                      } catch (err) {
+                        throw new Error(
+                          err instanceof ApiError ? err.message : 'Could not change plan.',
+                        )
+                      }
                       toast('ok', `Switched to the ${p.name} plan.`)
-                    } catch (err) {
-                      toast('err', err instanceof ApiError ? err.message : 'Could not change plan.')
-                    }
-                  }}
+                    })
+                  }
                 >
                   Switch to {p.name}
                 </Button>
