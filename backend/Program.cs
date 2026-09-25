@@ -75,9 +75,40 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(30),
         };
+        options.Events = new JwtBearerEvents
+        {
+            // Access tokens live for AccessTokenMinutes, so check the account on every request:
+            // a suspension must cut off API access immediately, and a user removed from
+            // Admin:Emails must lose the admin claim without waiting for the token to expire.
+            OnTokenValidated = async ctx =>
+            {
+                var idClaim = ctx.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (!Guid.TryParse(idClaim, out var userId))
+                {
+                    ctx.Fail("Invalid token.");
+                    return;
+                }
+                var db = ctx.HttpContext.RequestServices.GetRequiredService<Backend.Data.AppDbContext>();
+                var user = await db.Users.AsNoTracking().Where(u => u.Id == userId)
+                    .Select(u => new { u.Email, u.IsSuspended }).FirstOrDefaultAsync();
+                if (user is null || user.IsSuspended)
+                {
+                    ctx.Fail("Account unavailable.");
+                    return;
+                }
+                var admins = ctx.HttpContext.RequestServices.GetRequiredService<Backend.Authentication.AdminAccess>();
+                if (ctx.Principal?.Identity is System.Security.Claims.ClaimsIdentity identity && !admins.IsAdmin(user.Email))
+                    foreach (var c in identity.FindAll(Backend.Authentication.JwtTokenService.PlatformAdminClaim).ToList())
+                        identity.RemoveClaim(c);
+            },
+        };
     });
-builder.Services.AddAuthorization();
+builder.Services.AddSingleton<Backend.Authentication.AdminAccess>();
+builder.Services.AddAuthorization(o =>
+    o.AddPolicy(Backend.Authentication.AdminAccess.Policy, p =>
+        p.RequireClaim(Backend.Authentication.JwtTokenService.PlatformAdminClaim, "true")));
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, Backend.Authentication.AdminDeniedHandler>();
 
 // ---------------------------------------------------------------------------
 // Upload ceiling: Upload:MaxBytes (appsettings) or Upload__MaxBytes (env). Not unlimited.
@@ -151,6 +182,19 @@ builder.Services.AddScoped<IWorkspaceService, WorkspaceService>();
 builder.Services.AddScoped<IApiKeyService, ApiKeyService>();
 builder.Services.AddScoped<IBillingService, BillingService>();
 builder.Services.AddScoped<IAnalyticsService, AnalyticsService>();
+builder.Services.AddScoped<Backend.Services.Admin.IAdminAuditService, Backend.Services.Admin.AdminAuditService>();
+builder.Services.AddScoped<Backend.Services.Admin.IAdminDashboardService, Backend.Services.Admin.AdminDashboardService>();
+builder.Services.AddScoped<Backend.Services.Admin.IAdminUserService, Backend.Services.Admin.AdminUserService>();
+builder.Services.AddScoped<Backend.Services.Admin.IAdminResourceService, Backend.Services.Admin.AdminResourceService>();
+builder.Services.AddScoped<Backend.Services.Admin.IAdminJobService, Backend.Services.Admin.AdminJobService>();
+builder.Services.AddScoped<Backend.Services.Admin.IAdminHealthService, Backend.Services.Admin.AdminHealthService>();
+builder.Services.AddScoped<Backend.Services.Admin.IAdminBusinessService, Backend.Services.Admin.AdminBusinessService>();
+builder.Services.AddSingleton<Backend.Services.ISecurityEventService, Backend.Services.SecurityEventService>();
+builder.Services.AddScoped<Backend.Services.Admin.IAdminSecurityService, Backend.Services.Admin.AdminSecurityService>();
+builder.Services.AddScoped<Backend.Services.Admin.IAdminUsageService, Backend.Services.Admin.AdminUsageService>();
+builder.Services.AddScoped<Backend.Services.IPlatformSettingsService, Backend.Services.PlatformSettingsService>();
+builder.Services.AddScoped<Backend.Services.ISupportService, Backend.Services.SupportService>();
+builder.Services.AddScoped<Backend.Services.Admin.IAdminCmsService, Backend.Services.Admin.AdminCmsService>();
 
 // Drains DocumentProcessingJob rows off the request thread - see BackgroundJobs/DocumentProcessingBackgroundService.
 builder.Services.AddHostedService<Backend.BackgroundJobs.DocumentProcessingBackgroundService>();
@@ -247,10 +291,11 @@ app.UseMiddleware<RequestLoggingMiddleware>();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-app.UseIpRateLimiting();
+app.UseMiddleware<Backend.Services.RecordingIpRateLimitMiddleware>();
 app.UseCors(CorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<MaintenanceMiddleware>();
 
 app.MapControllers();
 
