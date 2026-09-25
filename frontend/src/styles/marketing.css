@@ -1422,3 +1422,16 @@ table.compare--3 th:not(:first-child) {
 .dxpage .card {
   background: var(--surface);
 }
+
+.mnav__mobile .mnav__signout {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: var(--r-sm);
+  background: none;
+  border: 0;
+  color: var(--text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
