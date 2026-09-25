@@ -4,6 +4,7 @@ import { KeyRound, Save, RotateCcw, Check, Moon, Sun, Monitor, ShieldCheck, LogO
 import { Button } from '../components/ui/Button'
 import { Field, Input, Select } from '../components/ui/Field'
 import { useToast } from '../components/ui/Toast'
+import { useCheckout } from '../components/app/Checkout'
 import { PLANS, usePlan } from '../lib/plan'
 import { useTheme, type ThemePref } from '../lib/theme'
 import { useAuth } from '../lib/auth'
@@ -67,9 +68,12 @@ export default function SettingsPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const { plan, changePlan } = usePlan()
+  const checkout = useCheckout()
   const { pref, setPref } = useTheme()
   const { user, signOut } = useAuth()
   const { workspaces, currentWorkspace, switchWorkspace, renameWorkspace } = useWorkspace()
+  const [wsName, setWsName] = useState<string | null>(null)
+  const [wsError, setWsError] = useState<string | null>(null)
   const [cfg, setCfg] = useState<Config>(load)
   const tabParam = params.get('tab')
   const [active, setActive] = useState(
@@ -176,32 +180,53 @@ export default function SettingsPage() {
           {active === 'workspace' && (
             <div className="card settings-section">
               <h3>Workspace</h3>
-              <Field label="Current workspace" full hint="The selected workspace controls what data you see across the app.">
-                {(id) => (
-                  <Select
-                    id={id}
-                    value={currentWorkspace?.id}
-                    onChange={(e) => switchWorkspace(e.target.value)}
-                  >
-                    {workspaces.map((w) => (
-                      <option key={w.id} value={w.id}>
-                        {w.name}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-              <Field label="Workspace name" full>
-                {(id) => (
-                  <Input
-                    id={id}
-                    value={currentWorkspace?.name ?? ''}
-                    onChange={(e) =>
-                      currentWorkspace && renameWorkspace(currentWorkspace.id, e.target.value)
-                    }
-                  />
-                )}
-              </Field>
+              {workspaces.length === 0 ? (
+                <p className="muted">
+                  You have no workspaces yet. Team workspaces are part of the Team plan; create one from the
+                  workspace menu in the sidebar.
+                </p>
+              ) : (
+                <>
+                  <Field label="Current workspace" full hint="Choose which of your workspaces you are working in.">
+                    {(id) => (
+                      <Select id={id} value={currentWorkspace?.id} onChange={(e) => switchWorkspace(e.target.value)}>
+                        {workspaces.map((w) => (
+                          <option key={w.id} value={w.id}>
+                            {w.name}
+                          </option>
+                        ))}
+                      </Select>
+                    )}
+                  </Field>
+                  <Field label="Workspace name" full error={wsError ?? undefined}>
+                    {(id) => (
+                      <Input
+                        id={id}
+                        value={wsName ?? currentWorkspace?.name ?? ''}
+                        maxLength={100}
+                        onChange={(e) => setWsName(e.target.value)}
+                      />
+                    )}
+                  </Field>
+                  <div>
+                    <Button
+                      disabled={!currentWorkspace || !wsName?.trim() || wsName.trim() === currentWorkspace.name}
+                      onClick={async () => {
+                        setWsError(null)
+                        try {
+                          await renameWorkspace(currentWorkspace!.id, wsName!.trim())
+                          setWsName(null)
+                          toast('ok', 'Workspace renamed.')
+                        } catch (e) {
+                          setWsError(e instanceof Error ? e.message : 'Could not rename the workspace.')
+                        }
+                      }}
+                    >
+                      Save name
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
@@ -451,13 +476,15 @@ export default function SettingsPage() {
                         block
                         disabled={current}
                         onClick={() => {
-                          changePlan(id)
-                          toast(
-                            'ok',
-                            id === 'free'
-                              ? 'Switched to the Free plan (demo).'
-                              : `Switched to ${p.name} (demo — no payment processed).`,
-                          )
+                          if (id === 'free') {
+                            changePlan(id)
+                            toast('ok', 'Switched to the Free plan.')
+                            return
+                          }
+                          checkout.open(id, async () => {
+                            await changePlan(id)
+                            toast('ok', `Switched to ${p.name}.`)
+                          })
                         }}
                       >
                         {current ? 'Current plan' : `Switch to ${p.name}`}
