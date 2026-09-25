@@ -21,7 +21,8 @@ public interface IWorkspaceService
     Task RemoveMemberAsync(Guid id, Guid memberOrUserId, Guid userId, CancellationToken ct);
 }
 
-/// <summary>Team workspaces (spec section 22). Requires the Team plan to create one.
+/// <summary>Workspaces (spec section 22). Everyone has a personal one; creating additional team
+/// workspaces requires the Team plan.
 /// Invitations are mocked - no email is sent, a pending member row is created directly,
 /// and it activates the moment someone registers with a matching email.</summary>
 public class WorkspaceService : IWorkspaceService
@@ -37,8 +38,28 @@ public class WorkspaceService : IWorkspaceService
         _activity = activity;
     }
 
+    /// <summary>Makes sure the user has a personal workspace (older accounts predate them) and that
+    /// their knowledge bases belong to a workspace. Safe to call repeatedly.</summary>
+    private async Task EnsurePersonalAsync(Guid userId, CancellationToken ct)
+    {
+        var personal = await _db.Workspaces.FirstOrDefaultAsync(w => w.OwnerId == userId && w.IsPersonal, ct);
+        if (personal is null)
+        {
+            personal = new Workspace { Name = "Personal", OwnerId = userId, IsPersonal = true };
+            _db.Workspaces.Add(personal);
+            await _db.SaveChangesAsync(ct);
+        }
+        var loose = await _db.KnowledgeBases.Where(k => k.OwnerId == userId && k.WorkspaceId == null).ToListAsync(ct);
+        if (loose.Count > 0)
+        {
+            foreach (var kb in loose) kb.WorkspaceId = personal.Id;
+            await _db.SaveChangesAsync(ct);
+        }
+    }
+
     public async Task<List<WorkspaceResponse>> ListAsync(Guid userId, CancellationToken ct)
     {
+        await EnsurePersonalAsync(userId, ct);
         var workspaces = await _db.Workspaces
             .Where(w => w.OwnerId == userId || w.Members.Any(m => m.UserId == userId))
             .Include(w => w.Members)
@@ -74,6 +95,7 @@ public class WorkspaceService : IWorkspaceService
     public async Task DeleteAsync(Guid id, Guid userId, CancellationToken ct)
     {
         var workspace = await _auth.GetWorkspaceAsync(id, userId, MemberRole.Owner, ct);
+        if (workspace.IsPersonal) throw new ValidationAppException("Your personal workspace cannot be deleted.");
         _db.Workspaces.Remove(workspace);
         await _db.SaveChangesAsync(ct);
     }
@@ -89,6 +111,13 @@ public class WorkspaceService : IWorkspaceService
     public async Task<WorkspaceMemberResponse> InviteAsync(Guid id, Guid userId, InviteWorkspaceMemberRequest request, CancellationToken ct)
     {
         var workspace = await _auth.GetWorkspaceAsync(id, userId, MemberRole.Admin, ct);
+
+        // Team features are paid for by the workspace owner's plan, whoever is doing the inviting.
+        if (workspace.IsPersonal)
+            throw new ValidationAppException("A personal workspace cannot have members. Create a team workspace to invite people.");
+        var ownerPlan = await _db.Users.Where(u => u.Id == workspace.OwnerId).Select(u => u.Plan).FirstOrDefaultAsync(ct);
+        if (ownerPlan is null || !ownerPlan.TeamWorkspaceEnabled)
+            throw new PlanLimitExceededException("Inviting team members requires the Team plan. Upgrade to invite people.");
 
         if (!Enum.TryParse<MemberRole>(request.Role, true, out var role))
             throw new ValidationAppException("Role must be Owner, Admin, or Member.");
@@ -152,5 +181,5 @@ public class WorkspaceService : IWorkspaceService
     }
 
     private static WorkspaceResponse Map(Workspace w) =>
-        new(w.Id, w.Name, w.OwnerId, w.Members.Count + 1 /* +owner */, w.CreatedAt, w.UpdatedAt);
+        new(w.Id, w.Name, w.OwnerId, w.Members.Count + 1 /* +owner */, w.CreatedAt, w.UpdatedAt, w.IsPersonal);
 }
