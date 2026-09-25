@@ -29,7 +29,6 @@ const COLS: { title: string; links: { label: string; to: string; ext?: boolean }
     links: [
       { label: 'FAQ', to: '/#faq' },
       { label: 'GitHub', to: '/github' },
-      { label: 'Playground', to: '/playground' },
     ],
   },
   {
