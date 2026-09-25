@@ -7,6 +7,7 @@ import ShortcutsModal from './ShortcutsModal'
 import NotificationBell from '../notifications/NotificationBell'
 import CommandPalette from '../search/CommandPalette'
 import StatusPill from '../ui/StatusPill'
+import { usePlatformStatus } from '../../lib/platformStatus'
 import { useUI } from '../../lib/ui'
 
 const TITLES: Record<string, { title: string; subtitle: string }> = {
@@ -35,14 +36,6 @@ const TITLES: Record<string, { title: string; subtitle: string }> = {
     title: 'Developer Portal',
     subtitle: 'API keys, documentation and self-hosting resources',
   },
-  '/playground': {
-    title: 'RAG Playground',
-    subtitle: 'Tune retrieval parameters and inspect the pipeline',
-  },
-  '/prompt-playground': {
-    title: 'Prompt Playground',
-    subtitle: 'Shape the system prompt sent to the LLM',
-  },
   '/billing': { title: 'Billing & Usage', subtitle: 'Plan, limits and monthly usage' },
   '/team': { title: 'Team', subtitle: 'Members, roles and invitations' },
   '/activity': { title: 'Activity', subtitle: 'A timeline of everything that happened' },
@@ -57,6 +50,7 @@ export default function AppLayout() {
   const [open, setOpen] = useState(false)
   const { pathname } = useLocation()
   const { setSearchOpen } = useUI()
+  const platform = usePlatformStatus(60_000)
   const meta = TITLES[pathname] ?? { title: 'RAG Starter', subtitle: '' }
 
   return (
@@ -92,7 +86,7 @@ export default function AppLayout() {
             </button>
             <NotificationBell />
             <HelpMenu />
-            <StatusPill status="ok" label="All systems operational" />
+            {platform?.maintenanceMode && <StatusPill status="warn" label="Under maintenance" />}
             {pathname !== '/chat' && (
               <Link className="btn btn--secondary btn--sm" to="/chat">
                 <Sparkles size={15} />
