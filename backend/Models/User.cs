@@ -16,6 +16,11 @@ public class User
     /// <summary>Coarse global role. Fine-grained access is per Workspace/Knowledge Base membership.</summary>
     public MemberRole Role { get; set; } = MemberRole.Member;
 
+    /// <summary>Set by a platform admin. A suspended user cannot sign in or refresh a session.</summary>
+    public bool IsSuspended { get; set; }
+    public DateTimeOffset? SuspendedAt { get; set; }
+    public string? SuspensionReason { get; set; }
+
     public Guid? PlanId { get; set; }
     public Plan? Plan { get; set; }
 
