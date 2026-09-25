@@ -39,7 +39,8 @@ export default function TeamPage() {
     listWorkspaces()
       .then(async (list) => {
         if (cancelled) return
-        const ws = list[0] ?? null
+        // The personal workspace is yours alone; the team page is about the shared one.
+        const ws = list.find((w) => !w.isPersonal) ?? null
         setWorkspace(ws)
         if (ws) setMembers(await listWorkspaceMembers(ws.id))
       })
@@ -119,6 +120,16 @@ export default function TeamPage() {
 
       {loading ? (
         <p className="muted">Loading team…</p>
+      ) : !workspace && plan !== 'team' ? (
+        <section className="card">
+          <div className="panel-head">
+            <h3>Work together with a team</h3>
+          </div>
+          <p className="muted">
+            Create a shared workspace and invite teammates with the Team plan. Your personal workspace stays private.
+          </p>
+          <Button onClick={() => navigate('/pricing')}>See plans</Button>
+        </section>
       ) : !workspace ? (
         <section className="card">
           <div className="panel-head">
