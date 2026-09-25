@@ -32,6 +32,13 @@ public class AppDbContext : DbContext
     public DbSet<ChatSource> ChatSources => Set<ChatSource>();
 
     public DbSet<ActivityLog> ActivityLogs => Set<ActivityLog>();
+    public DbSet<AdminAuditLog> AdminAuditLogs => Set<AdminAuditLog>();
+    public DbSet<PlatformSettings> PlatformSettings => Set<PlatformSettings>();
+    public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
+    public DbSet<SupportMessage> SupportMessages => Set<SupportMessage>();
+    public DbSet<SecurityEvent> SecurityEvents => Set<SecurityEvent>();
+    public DbSet<CmsContent> CmsContents => Set<CmsContent>();
+    public DbSet<CmsContentVersion> CmsContentVersions => Set<CmsContentVersion>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
