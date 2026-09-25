@@ -18,7 +18,6 @@ const GROUPS: { title: string; items: [string[], string][] }[] = [
     items: [
       [['G', 'D'], 'Go to Dashboard'],
       [['G', 'C'], 'Go to Knowledge Chat'],
-      [['G', 'P'], 'Go to RAG Playground'],
     ],
   },
 ]
