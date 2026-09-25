@@ -8,6 +8,10 @@ public class Workspace
 
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>Every user has exactly one personal workspace, created with the account. It cannot be
+    /// deleted and does not need the Team plan; extra team workspaces do.</summary>
+    public bool IsPersonal { get; set; }
+
     public Guid OwnerId { get; set; }
     public User? Owner { get; set; }
 
