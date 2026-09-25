@@ -1,3 +1,5 @@
+import { usePublicContent } from '../../lib/publicContent'
+
 export interface FaqItem {
   q: string
   a: string
@@ -46,13 +48,18 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
 ]
 
-export default function Faq({ items = FAQ_ITEMS }: { items?: FaqItem[] }) {
+/** Shows FAQ entries published in the admin CMS; until at least one is published it shows the
+ *  built-in answers, so the section is never empty. */
+export default function Faq({ items }: { items?: FaqItem[] }) {
+  const published = usePublicContent('faq')
+  const cms: FaqItem[] | null = published && published.length > 0 ? published.map((p) => ({ q: p.title, a: p.body || p.summary })) : null
+  const list = items ?? cms ?? FAQ_ITEMS
   return (
     <div className="faq">
-      {items.map((f) => (
+      {list.map((f) => (
         <details className="faq__item" key={f.q}>
           <summary>{f.q}</summary>
-          <p>{f.a}</p>
+          <p style={{ whiteSpace: 'pre-line' }}>{f.a}</p>
         </details>
       ))}
     </div>
