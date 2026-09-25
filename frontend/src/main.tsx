@@ -10,6 +10,7 @@ import { UIProvider } from './lib/ui'
 import { WorkspaceProvider } from './lib/workspace'
 import { NotificationsProvider } from './lib/notifications'
 import { ActivityProvider } from './lib/activity'
+import { CheckoutProvider } from './components/app/Checkout'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -21,7 +22,9 @@ createRoot(document.getElementById('root')!).render(
               <WorkspaceProvider>
                 <NotificationsProvider>
                   <ActivityProvider>
-                    <App />
+                    <CheckoutProvider>
+                      <App />
+                    </CheckoutProvider>
                   </ActivityProvider>
                 </NotificationsProvider>
               </WorkspaceProvider>
