@@ -9,18 +9,19 @@ import {
   Users,
   Activity,
   Settings,
-  FlaskConical,
   SquareTerminal,
   CreditCard,
   BookOpen,
   LifeBuoy,
   LogOut,
+  ShieldCheck,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import Logo from '../ui/Logo'
 import { GithubIcon } from '../ui/icons'
 import WorkspaceSwitcher from './WorkspaceSwitcher'
 import FavoritesNav from './FavoritesNav'
+import { useIsAdmin } from './AdminRoute'
 import { useAuth } from '../../lib/auth'
 import { initials } from '../../lib/format'
 
@@ -33,13 +34,12 @@ const PRIMARY_NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: '/analytics', label: 'Analytics', icon: BarChart3 },
   { to: '/team', label: 'Team', icon: Users },
   { to: '/activity', label: 'Activity', icon: Activity },
+  { to: '/support', label: 'Support', icon: LifeBuoy },
   { to: '/settings', label: 'Settings', icon: Settings },
 ]
 
 // Existing tools that predate this nav's spec — kept reachable, not deleted.
 const MORE_NAV: { to: string; label: string; icon: LucideIcon }[] = [
-  { to: '/playground', label: 'RAG Playground', icon: FlaskConical },
-  { to: '/prompt-playground', label: 'Prompt Playground', icon: SquareTerminal },
   { to: '/billing', label: 'Billing & Usage', icon: CreditCard },
   { to: '/developer', label: 'Developer Portal', icon: SquareTerminal },
   { to: '/docs', label: 'Documentation', icon: BookOpen },
@@ -71,25 +71,34 @@ export default function Sidebar({
   onNavigate: () => void
 }) {
   const { user, signOut } = useAuth()
+  const isAdmin = useIsAdmin()
 
   return (
-    <aside className={`sidebar scroll${open ? ' sidebar--open' : ''}`}>
+    <aside className={`sidebar${open ? ' sidebar--open' : ''}`}>
       <div className="sidebar__brand">
         <Logo to="/dashboard" />
       </div>
 
       <WorkspaceSwitcher />
 
-      <div>
-        <NavItems items={PRIMARY_NAV} onNavigate={onNavigate} />
-      </div>
+      <div className="sidebar__nav scroll">
+        <div>
+          <NavItems items={PRIMARY_NAV} onNavigate={onNavigate} />
+          {isAdmin && (
+            <NavItems
+              items={[{ to: '/admin', label: 'Admin Panel', icon: ShieldCheck }]}
+              onNavigate={onNavigate}
+            />
+          )}
+        </div>
 
-      <div>
-        <div className="sidebar__section">More</div>
-        <NavItems items={MORE_NAV} onNavigate={onNavigate} />
-      </div>
+        <div>
+          <div className="sidebar__section">More</div>
+          <NavItems items={MORE_NAV} onNavigate={onNavigate} />
+        </div>
 
-      <FavoritesNav />
+        <FavoritesNav />
+      </div>
 
       <div className="sidebar__foot">
         <a
