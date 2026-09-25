@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Backend.DTOs.Teams;
 
-public record WorkspaceResponse(Guid Id, string Name, Guid OwnerId, int MemberCount, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+public record WorkspaceResponse(Guid Id, string Name, Guid OwnerId, int MemberCount, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, bool IsPersonal);
 
 public record CreateWorkspaceRequest([Required, MinLength(2), MaxLength(200)] string Name);
 
