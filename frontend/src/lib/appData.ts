@@ -1,39 +1,4 @@
-/* Shared UI types (activity, notifications, search) plus the sample sources used only by
-   the Playground preview. Real data comes from services/api.ts. */
-
-export interface SourceRef {
-  id: string
-  document: string
-  page: number
-  snippet: string
-}
-
-export const mockSources: SourceRef[] = [
-  {
-    id: 'src_1',
-    document: 'English-Grammar-In-Use.pdf',
-    page: 132,
-    snippet: 'The present perfect connects a past action to the present moment…',
-  },
-  {
-    id: 'src_2',
-    document: 'English-Grammar-In-Use.pdf',
-    page: 141,
-    snippet: 'Use the past simple when the time is specified: "I read it yesterday."',
-  },
-  {
-    id: 'src_3',
-    document: 'Platform-Architecture-Spec-v3.pdf',
-    page: 12,
-    snippet: 'React communicates only with the ASP.NET Core API, never with Python…',
-  },
-  {
-    id: 'src_4',
-    document: 'Retrieval-Augmented-Generation-Survey.pdf',
-    page: 7,
-    snippet: 'A chunk overlap of 10–20% preserves context across boundaries…',
-  },
-]
+/* Shared UI types (activity, notifications, search). Real data comes from services/api.ts. */
 
 export const DEFAULT_TAGS = ['Research', 'Education', 'Programming', 'Important']
 
