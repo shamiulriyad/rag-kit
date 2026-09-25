@@ -7,7 +7,6 @@ import {
   Upload,
   Sparkles,
   Settings2,
-  FlaskConical,
   ArrowUpRight,
   Database,
   Star,
@@ -233,11 +232,6 @@ export default function DashboardPage() {
               <Settings2 />
               <strong>Tune retrieval</strong>
               <span>Chunk size, overlap, top-K</span>
-            </button>
-            <button className="quick__btn" onClick={() => navigate('/playground')}>
-              <FlaskConical />
-              <strong>Open Playground</strong>
-              <span>Experiment with retrieval</span>
             </button>
             <button className="quick__btn" onClick={() => setCreateKbOpen(true)}>
               <Database />
