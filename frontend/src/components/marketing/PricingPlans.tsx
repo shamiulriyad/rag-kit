@@ -4,6 +4,7 @@ import { Check, Minus, Star, Users } from 'lucide-react'
 import { PLANS, YEARLY_SAVING_PCT, usePlan } from '../../lib/plan'
 import { useToast } from '../ui/Toast'
 import TeamUpgradeModal from './TeamUpgradeModal'
+import { useCheckout } from '../app/Checkout'
 
 type Cycle = 'monthly' | 'yearly'
 
@@ -54,6 +55,7 @@ export default function PricingPlans({
   const navigate = useNavigate()
   const toast = useToast()
   const { changePlan } = usePlan()
+  const checkout = useCheckout()
   const yearly = cycle === 'yearly'
 
   const free = PLANS.free
@@ -62,8 +64,10 @@ export default function PricingPlans({
 
   function choosePro() {
     if (onChoosePro) return onChoosePro()
-    changePlan('pro')
-    toast('ok', 'Pro plan activated (demo — no payment was processed).')
+    checkout.open('pro', async () => {
+      await changePlan('pro')
+      toast('ok', 'Pro plan activated.')
+    })
   }
 
   function chooseTeam() {
@@ -241,17 +245,19 @@ export default function PricingPlans({
       </div>
 
       <p className="pricing__disclaimer">
-        Plans and upgrades are a frontend demo for the current MVP. No payment is
-        processed and there is no billing backend yet.
+        Checkout (card, bKash, Nagad, Rocket) is a demo for the current MVP. No payment
+        is processed and there is no billing backend yet.
       </p>
 
       <TeamUpgradeModal
         open={teamModal}
         onClose={() => setTeamModal(false)}
         onContinue={() => {
-          changePlan('team')
-          toast('ok', 'Team plan activated (demo — no payment was processed).')
           setTeamModal(false)
+          checkout.open('team', async () => {
+            await changePlan('team')
+            toast('ok', 'Team plan activated.')
+          })
         }}
       />
     </div>
