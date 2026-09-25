@@ -4,6 +4,7 @@ import { Sparkles, X } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { usePlan } from '../../lib/plan'
 import { useToast } from '../ui/Toast'
+import { useCheckout } from './Checkout'
 
 interface Props {
   open: boolean
@@ -25,6 +26,7 @@ export default function UpgradeDialog({
   const navigate = useNavigate()
   const toast = useToast()
   const { changePlan } = usePlan()
+  const checkout = useCheckout()
 
   useEffect(() => {
     if (!open) return
@@ -73,16 +75,18 @@ export default function UpgradeDialog({
 
         <p>{message}</p>
         <p className="muted" style={{ fontSize: '0.78rem' }}>
-          Upgrading here is a demo — no payment is processed.
+          Pay by card, bKash, Nagad or Rocket. Checkout is a demo — nothing is charged.
         </p>
 
         <div className="modal__actions">
           <Button
             block
             onClick={() => {
-              changePlan('pro')
-              toast('ok', 'Pro plan activated (demo — no payment was processed).')
               onClose()
+              checkout.open('pro', async () => {
+                await changePlan('pro')
+                toast('ok', 'Pro plan activated.')
+              })
             }}
           >
             Upgrade to Pro
