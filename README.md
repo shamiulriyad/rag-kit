@@ -2,8 +2,9 @@
 
 A commercial-style, multi-tenant **RAG Starter** SaaS: accounts, Knowledge Bases,
 PDF documents, chat with citations, usage/plan limits, teams, billing (mocked),
-notifications, activity logs and analytics — built on React, ASP.NET Core,
-Python, Qdrant, Gemini and Postgres (Supabase-compatible).
+notifications, activity logs, analytics, support tickets and a **platform admin
+panel** for the operator — built on React, ASP.NET Core, Python, Qdrant, Gemini
+and Postgres (Supabase-compatible).
 
 ```
 React  ──HTTP──▶  ASP.NET Core API  ──HTTP──▶  Python RAG service  ──▶  Qdrant (per-KB collections) + Gemini
@@ -24,7 +25,7 @@ holds embeddings, one collection per Knowledge Base.
 |--------|-----------|------|
 | [`backend/`](backend/) | ASP.NET Core Web API — auth, Knowledge Bases, documents, chat, billing, teams, analytics, etc. The only thing React talks to. | below |
 | [`rag/`](rag/) | Python FastAPI RAG service — extraction, cleaning, chunking, embedding, retrieval, generation. One Qdrant collection per Knowledge Base. | [`rag/README.md`](rag/README.md), [`docs/`](docs/) |
-| [`frontend/`](frontend/) | React + TypeScript + Vite. Dashboard, Knowledge Bases, documents, chat, billing, team, settings. | below |
+| [`frontend/`](frontend/) | React + TypeScript + Vite. Customer app (dashboard, Knowledge Bases, documents, chat, billing, team, support, settings) and the operator's **admin panel** at `/admin`. | below |
 | [`docs/`](docs/) | Deep dives on the RAG pipeline itself (extraction/chunking/embedding/retrieval) — still accurate; written before the multi-tenant API existed, so treat collection/endpoint names there as the single-document CLI story. | [`docs/README.md`](docs/README.md) |
 
 ## Quick start with Docker
@@ -103,6 +104,9 @@ Activity, Analytics, Health). Summary:
 | Settings | `GET/PUT /api/settings` (chunk size/overlap, top-k, similarity threshold, temperature, models) |
 | Activity | `GET/DELETE /api/activity` |
 | Analytics | `GET /api/analytics/{overview,questions,documents,usage}` |
+| Support | `GET/POST /api/support`, `GET /api/support/{id}`, `POST .../{id}/messages`, `POST .../{id}/close` (a customer's own tickets only) |
+| Public (no login) | `GET /api/public/content?type=faq` (published CMS content), `GET /api/public/status` (maintenance / sign-ups open) |
+| Admin (platform admins only) | `/api/admin/*` — dashboard, users, workspaces, documents, jobs, health, plans, subscriptions, usage, billing events, audit, CMS, security, support, settings. See [Admin panel](#admin-panel). |
 | Health | `GET /api/health` → `{ api, database, rag, qdrant }` |
 
 Every response is `{ success, data?, message?, errors? }`. Every protected
@@ -118,17 +122,57 @@ copy .env.example .env                                # VITE_API_URL defaults to
 npm run dev                                           # http://localhost:5173
 ```
 
-The frontend ships with rich mock data (Knowledge Bases, chat history, team,
-billing) so it's usable standalone. `services/api.ts` is the only file that
-calls the backend today (health/upload/chat) — wiring the rest of the pages to
-the new endpoints above (matching DTOs shapes to `lib/appData.ts`/`mockData.ts`/
-`plan.ts`) is the natural next step and was scoped as a backend-first pass.
+The pages talk to the backend through `services/api.ts` (customer app) and
+`services/adminApi.ts` (admin panel); there is no mock data standing in for
+records. A few things are still per-browser rather than server-side: the
+activity timeline, in-app notifications, and starred/favorite/tag markers.
+
+## Admin panel
+
+The operator's console lives at `/admin`, separate from the customer app.
+Sign in with an admin account and you land there automatically.
+
+**Becoming an admin.** Admins are the emails listed in `Admin__Emails`
+(comma-separated, in `backend/.env`). Register an account with one of those
+emails, then sign in. There is no in-app way to grant admin access. The check is
+made on the server on every request, so removing an email takes effect
+immediately and no one can promote themselves.
+
+| Group | Pages |
+|-------|-------|
+| Overview | Dashboard: users, workspaces, KBs, documents, questions, failed jobs, storage, subscriptions, health, charts, recent audit |
+| Platform Management | Users (suspend/reactivate, plan), Workspaces, Knowledge Bases, Documents, Invitations |
+| AI and RAG Operations | Processing Jobs (retry/reprocess, stage view, sanitized log), System Health (live probes) |
+| Business Management | Plans, Subscriptions, Usage & Cost, Billing Events |
+| Website CMS | Content: draft, preview, publish/unpublish, version history and restore |
+| Security and Compliance | Audit Logs, Admin Users & Roles, API Keys (revoke), Security Events, Rate-limit Events |
+| Support | Support Tickets (inbox and replies) |
+| Settings | Platform Settings: maintenance mode and opening/closing new sign-ups |
+
+Design rules it follows:
+
+- **No fake data.** Every number comes from the database or a live probe. Cost
+  is labelled *Estimate* (token counts are not recorded; set
+  `Admin__EstimatedCostPerQuestionUsd` to get an AI-cost estimate), and verified
+  billing shows *Not connected* because no payment provider exists.
+- **The server is the authority.** Every `/api/admin/*` call requires the
+  `PlatformAdmin` policy; hiding a menu item in the UI is only a convenience.
+  Actions such as suspend, retry, revoke, publish and settings changes are
+  written to the admin audit log. Denied attempts show up under Security Events.
+- **Safe content.** CMS text is stored as plain text and markup or scripts are
+  rejected on save. Published FAQ entries feed the landing page (it falls back
+  to built-in answers until one is published).
+- **Maintenance mode** makes every customer API call return 503 with your
+  message while admins, sign-in and the panel keep working. Closing sign-ups
+  makes registration return 403 and shows a notice on the sign-up page.
+- Suspending a user also cuts off their current session immediately, not only at
+  the next token refresh.
 
 ## Configuration
 
 | Service | File | Key settings |
 |---------|------|--------------|
-| .NET | `backend/appsettings.json` + env | `DATABASE_CONNECTION_STRING`, `Jwt__Secret`, `Supabase__*`, `Rag__BaseUrl`, `Upload__MaxBytes`, `Cors__Origins` |
+| .NET | `backend/appsettings.json` + env | `DATABASE_CONNECTION_STRING`, `Jwt__Secret`, `Supabase__*`, `Rag__BaseUrl`, `Upload__MaxBytes`, `Cors__Origins`, `Admin__Emails` (who is a platform admin), `Admin__EstimatedCostPerQuestionUsd` (optional, for the cost estimate) |
 | Python | `rag/.env` | `GOOGLE_API_KEY`, `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`, `QDRANT_URL` (+ `QDRANT_PATH` for the CLI-only fallback), `MAX_UPLOAD_MB` |
 | React | `frontend/.env` | `VITE_API_URL`, `VITE_MAX_UPLOAD_MB` |
 
@@ -149,6 +193,12 @@ reference: [`docs/configuration.md`](docs/configuration.md).
 - **Auth**: JWT (access + rotating refresh tokens), BCrypt password hashes, role
   checks (`Owner`/`Admin`/`Member`) on every Knowledge Base/Workspace resource.
   The caller's id always comes from JWT claims, never the request body.
+- **Workspaces**: every account gets a private *Personal* workspace at sign-up
+  (older accounts get one the first time they open the app); it cannot be deleted
+  or have members. Extra team workspaces, and inviting people into them, need the
+  Team plan (checked against the workspace owner's plan on the server).
+- **Migrations**: the backend applies pending EF migrations on startup
+  (`DbInitializer`), so `dotnet run` against a new database is enough.
 - **Billing/teams/email**: architecturally present (schema, endpoints,
   separation from core logic) but Stripe, real invitation email, and OCR for
   scanned PDFs are intentionally not implemented yet — marked future-ready per
