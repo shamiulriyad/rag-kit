@@ -24,23 +24,32 @@ public class AuthService : IAuthService
     private readonly IJwtTokenService _jwt;
     private readonly JwtOptions _jwtOptions;
     private readonly IActivityLogService _activity;
+    private readonly ISecurityEventService _security;
+    private readonly IPlatformSettingsService _platform;
 
     public AuthService(
         AppDbContext db,
         IPasswordHasher hasher,
         IJwtTokenService jwt,
         Microsoft.Extensions.Options.IOptions<JwtOptions> jwtOptions,
-        IActivityLogService activity)
+        IActivityLogService activity,
+        ISecurityEventService security,
+        IPlatformSettingsService platform)
     {
         _db = db;
         _hasher = hasher;
         _jwt = jwt;
         _jwtOptions = jwtOptions.Value;
         _activity = activity;
+        _security = security;
+        _platform = platform;
     }
 
     public async Task<AuthResponse> RegisterAsync(RegisterRequest request, CancellationToken ct)
     {
+        if (!(await _platform.GetStatusAsync(ct)).SignupsEnabled)
+            throw new ForbiddenException("New sign-ups are currently closed.");
+
         var email = request.Email.Trim().ToLowerInvariant();
 
         if (await _db.Users.AnyAsync(u => u.Email == email, ct))
@@ -62,6 +71,7 @@ public class AuthService : IAuthService
 
         _db.Subscriptions.Add(new Subscription { UserId = user.Id, PlanId = freePlan.Id, Status = SubscriptionStatus.Active, IsMock = true });
         _db.UserSettings.Add(new UserSettings { UserId = user.Id });
+        _db.Workspaces.Add(new Workspace { Name = "Personal", OwnerId = user.Id, IsPersonal = true });
 
         await _db.SaveChangesAsync(ct);
         await _activity.LogAsync(user.Id, null, ActivityAction.UserRegistered, "User", user.Id.ToString(), ct: ct);
@@ -75,7 +85,16 @@ public class AuthService : IAuthService
         var user = await _db.Users.Include(u => u.Plan).FirstOrDefaultAsync(u => u.Email == email, ct);
 
         if (user is null || !_hasher.Verify(request.Password, user.PasswordHash))
+        {
+            await _security.RecordAsync("login_failed", email, "/api/auth/login", user is null ? "Unknown email" : "Wrong password");
             throw new UnauthorizedAppException("Invalid email or password.");
+        }
+
+        if (user.IsSuspended)
+        {
+            await _security.RecordAsync("login_suspended", email, "/api/auth/login", "Sign-in attempt on a suspended account");
+            throw new ForbiddenException("This account has been suspended. Contact support.");
+        }
 
         user.LastLoginAt = DateTimeOffset.UtcNow;
         await _db.SaveChangesAsync(ct);
@@ -92,6 +111,9 @@ public class AuthService : IAuthService
 
         if (stored is null || !stored.IsActive || stored.User is null)
             throw new UnauthorizedAppException("Refresh token is invalid or has expired.");
+
+        if (stored.User.IsSuspended)
+            throw new UnauthorizedAppException("This account has been suspended.");
 
         // Rotate: revoke the used token and issue a new pair, so a stolen refresh
         // token can only be replayed once before it stops working.
