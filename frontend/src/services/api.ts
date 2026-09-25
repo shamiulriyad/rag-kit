@@ -98,7 +98,7 @@ function isEnvelope(body: unknown): body is ApiEnvelope<unknown> {
 // DTOs/Common/ApiResponse.cs) - this unwraps `data` automatically. A few
 // endpoints (e.g. /api/health) return a raw object instead; those pass
 // through unchanged since they have no `success` field to detect.
-async function request<T>(path: string, init?: RequestInit, isRetry = false): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit, isRetry = false): Promise<T> {
   let res: Response
   try {
     res = await fetch(`${BASE_URL}${path}`, withAuth(init))
@@ -484,6 +484,7 @@ export interface WorkspaceSummary {
   memberCount: number
   createdAt: string
   updatedAt: string
+  isPersonal: boolean
 }
 
 export interface WorkspaceMember {
@@ -503,6 +504,10 @@ export function listWorkspaces(): Promise<WorkspaceSummary[]> {
 
 export function createWorkspace(name: string): Promise<WorkspaceSummary> {
   return request('/api/workspaces', { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ name }) })
+}
+
+export function updateWorkspace(id: string, name: string): Promise<WorkspaceSummary> {
+  return request(`/api/workspaces/${id}`, { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify({ name }) })
 }
 
 export function listWorkspaceMembers(id: string): Promise<WorkspaceMember[]> {
@@ -528,3 +533,4 @@ export function updateWorkspaceMemberRole(id: string, memberId: string, role: st
 export function removeWorkspaceMember(id: string, memberId: string): Promise<void> {
   return request(`/api/workspaces/${id}/members/${memberId}`, { method: 'DELETE' })
 }
+
