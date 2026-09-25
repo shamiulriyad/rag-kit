@@ -90,12 +90,16 @@ public class KnowledgeBaseService : IKnowledgeBaseService
         if (request.WorkspaceId is not null)
             await _auth.GetWorkspaceAsync(request.WorkspaceId.Value, userId, ct: ct);
 
+        // Without an explicit workspace, a knowledge base belongs to the owner's personal one.
+        var workspaceId = request.WorkspaceId
+            ?? await _db.Workspaces.Where(w => w.OwnerId == userId && w.IsPersonal).Select(w => (Guid?)w.Id).FirstOrDefaultAsync(ct);
+
         var kb = new KnowledgeBase
         {
             Name = request.Name.Trim(),
             Description = request.Description?.Trim() ?? "",
             OwnerId = userId,
-            WorkspaceId = request.WorkspaceId,
+            WorkspaceId = workspaceId,
         };
         _db.KnowledgeBases.Add(kb);
         await _db.SaveChangesAsync(ct);
