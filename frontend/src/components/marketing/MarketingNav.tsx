@@ -3,7 +3,9 @@ import { Link } from 'react-router-dom'
 import { Menu, X } from 'lucide-react'
 import Logo from '../ui/Logo'
 import { GithubIcon } from '../ui/icons'
-import { LinkButton } from '../ui/Button'
+import { Button, LinkButton } from '../ui/Button'
+import { useAuth } from '../../lib/auth'
+import { useIsAdmin } from '../app/AdminRoute'
 
 const LINKS = [
   { label: 'Product', to: '/product' },
@@ -19,6 +21,10 @@ const GITHUB_URL = 'https://github.com/shamiulriyad/rag-kit'
 export default function MarketingNav() {
   const [scrolled, setScrolled] = useState(false)
   const [open, setOpen] = useState(false)
+  const { user, signOut } = useAuth()
+  const isAdmin = useIsAdmin()
+  // Signed-in visitors get a way back into the app instead of Sign In / Start Free.
+  const home = isAdmin ? { to: '/admin', label: 'Admin Panel' } : { to: '/dashboard', label: 'Dashboard' }
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8)
@@ -49,12 +55,25 @@ export default function MarketingNav() {
         </nav>
 
         <div className="mnav__actions">
-          <LinkButton variant="secondary" size="sm" to="/login">
-            Sign In
-          </LinkButton>
-          <LinkButton size="sm" to="/signup">
-            Start Free
-          </LinkButton>
+          {user ? (
+            <>
+              <Button variant="secondary" size="sm" onClick={signOut}>
+                Sign out
+              </Button>
+              <LinkButton size="sm" to={home.to}>
+                {home.label}
+              </LinkButton>
+            </>
+          ) : (
+            <>
+              <LinkButton variant="secondary" size="sm" to="/login">
+                Sign In
+              </LinkButton>
+              <LinkButton size="sm" to="/signup">
+                Start Free
+              </LinkButton>
+            </>
+          )}
           <button
             className="mnav__toggle"
             aria-label="Toggle menu"
@@ -81,9 +100,26 @@ export default function MarketingNav() {
           <GithubIcon size={15} />
           GitHub
         </a>
-        <Link to="/login" onClick={() => setOpen(false)}>
-          Sign In
-        </Link>
+        {user ? (
+          <>
+            <Link to={home.to} onClick={() => setOpen(false)}>
+              {home.label}
+            </Link>
+            <button
+              className="mnav__signout"
+              onClick={() => {
+                setOpen(false)
+                signOut()
+              }}
+            >
+              Sign out
+            </button>
+          </>
+        ) : (
+          <Link to="/login" onClick={() => setOpen(false)}>
+            Sign In
+          </Link>
+        )}
       </div>
     </header>
   )
