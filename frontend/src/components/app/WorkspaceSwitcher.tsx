@@ -10,12 +10,16 @@ export default function WorkspaceSwitcher() {
   const toast = useToast()
   const ref = useDismiss<HTMLDivElement>(open, () => setOpen(false))
 
-  function onCreate() {
+  async function onCreate() {
     const name = window.prompt('Name your new workspace')
     if (!name?.trim()) return
-    createWorkspace(name.trim())
-    toast('ok', `Created workspace "${name.trim()}".`)
-    setOpen(false)
+    try {
+      await createWorkspace(name.trim())
+      toast('ok', `Created workspace "${name.trim()}".`)
+      setOpen(false)
+    } catch (e) {
+      toast('err', e instanceof Error ? e.message : 'Could not create the workspace.')
+    }
   }
 
   return (
@@ -28,12 +32,13 @@ export default function WorkspaceSwitcher() {
         <span className="wsswitch__icon">
           <Building2 size={15} />
         </span>
-        <span className="truncate">{currentWorkspace?.name ?? 'Workspace'}</span>
+        <span className="truncate">{currentWorkspace?.name ?? 'No workspace'}</span>
         <ChevronsUpDown size={14} className="muted" />
       </button>
 
       {open && (
         <div className="wsswitch__menu">
+          {workspaces.length === 0 && <p className="wsswitch__empty muted">You have no workspaces yet.</p>}
           {workspaces.map((w) => (
             <button
               key={w.id}
