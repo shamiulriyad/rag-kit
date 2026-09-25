@@ -36,6 +36,8 @@ Language - very important:
 - Reply in the language of the USER'S MESSAGE, never in the language of the context.
   The documents may be written in a different language than the question; read them,
   then answer in the user's language (translate quotes and terms as needed).
+- The language of the context (for example Hungarian) must NEVER influence the language
+  of your reply. Only the words of the user's message decide it.
 - If the message is a language written in Latin letters (for example Bengali or Hindi in
   English letters, like "motivation ki?"), reply in that same language in the same
   style. If you cannot tell which language it is, reply in English.
@@ -44,7 +46,9 @@ Be direct - no preamble."""
 
 PROMPT = ChatPromptTemplate.from_messages([
     ("system", SYSTEM_PROMPT),
-    ("human", "Context:\n{context}\n\nQuestion: {question}"),
+    ("human", "Context:\n{context}\n\nQuestion: {question}\n\n"
+              "(Reply in the language of the question above - or in English if unsure - "
+              "not in the language of the context.)"),
 ])
 
 
