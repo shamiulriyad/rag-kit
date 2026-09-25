@@ -62,3 +62,21 @@ public class ApiKeyConfiguration : IEntityTypeConfiguration<ApiKey>
         b.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
     }
 }
+
+public class AdminAuditLogConfiguration : IEntityTypeConfiguration<AdminAuditLog>
+{
+    public void Configure(EntityTypeBuilder<AdminAuditLog> b)
+    {
+        b.ToTable("admin_audit_logs");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.ActorEmail).HasMaxLength(320);
+        b.Property(x => x.Action).IsRequired().HasMaxLength(60);
+        b.Property(x => x.ResourceType).HasMaxLength(50);
+        b.Property(x => x.ResourceId).HasMaxLength(64);
+        b.Property(x => x.Result).HasMaxLength(20);
+        b.Property(x => x.Details).HasMaxLength(500);
+        b.Property(x => x.IpAddress).HasMaxLength(64);
+        b.HasIndex(x => x.CreatedAt);
+        b.HasIndex(x => x.ActorId);
+    }
+}
