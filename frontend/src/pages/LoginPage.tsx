@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import AuthScaffold from '../components/app/AuthScaffold'
 import { Button } from '../components/ui/Button'
 import { Field, Input } from '../components/ui/Field'
@@ -7,7 +7,6 @@ import { useAuth } from '../lib/auth'
 
 export default function LoginPage() {
   const { signIn } = useAuth()
-  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -18,8 +17,8 @@ export default function LoginPage() {
     setBusy(true)
     setError(null)
     try {
+      // Once signed in, the guest-only route sends operators to /admin and everyone else to /dashboard.
       await signIn(email, password)
-      navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Sign in failed')
     } finally {
