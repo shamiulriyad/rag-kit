@@ -1,5 +1,5 @@
-/* Favorites / pins / document tags. Purely client state today; a backend would
-   expose the same add/remove/toggle operations per user. */
+/* Favorites / pins / document tags are client state. Workspaces are real: they come from the API,
+   and only the id of the one you last selected is remembered in the browser. */
 
 import {
   createContext,
@@ -8,7 +8,14 @@ import {
   useMemo,
   type ReactNode,
 } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocalStorage } from './hooks'
+import { useAuth } from './auth'
+import {
+  createWorkspace as apiCreateWorkspace,
+  listWorkspaces,
+  updateWorkspace as apiUpdateWorkspace,
+} from '../services/api'
 import { DEFAULT_TAGS } from './appData'
 
 interface PinnedConversation {
@@ -21,18 +28,12 @@ export interface Workspace {
   name: string
 }
 
-const DEFAULT_WORKSPACES: Workspace[] = [
-  { id: 'ws_personal', name: 'Personal' },
-  { id: 'ws_team', name: 'RAG Starter Team' },
-]
-
 interface WorkspaceState {
   starredKbs: string[]
   favoriteDocs: string[]
   pinnedConversations: PinnedConversation[]
   tagsByDoc: Record<string, string[]>
   customTags: string[]
-  workspaces: Workspace[]
   currentWorkspaceId: string
 }
 
@@ -42,13 +43,14 @@ const EMPTY: WorkspaceState = {
   pinnedConversations: [],
   tagsByDoc: {},
   customTags: [],
-  workspaces: DEFAULT_WORKSPACES,
-  currentWorkspaceId: 'ws_personal',
+  currentWorkspaceId: '',
 }
 
 interface WorkspaceValue extends WorkspaceState {
   allTags: string[]
-  currentWorkspace: Workspace
+  workspaces: Workspace[]
+  /** undefined until the list loads, and when the user has no workspace yet. */
+  currentWorkspace: Workspace | undefined
   toggleKb: (id: string) => void
   toggleDoc: (id: string) => void
   togglePin: (c: PinnedConversation) => void
@@ -59,8 +61,9 @@ interface WorkspaceValue extends WorkspaceState {
   removeTagFromDoc: (docId: string, tag: string) => void
   createTag: (tag: string) => void
   switchWorkspace: (id: string) => void
-  createWorkspace: (name: string) => void
-  renameWorkspace: (id: string, name: string) => void
+  /** Rejects with the API's message, e.g. when the plan does not include team workspaces. */
+  createWorkspace: (name: string) => Promise<void>
+  renameWorkspace: (id: string, name: string) => Promise<void>
 }
 
 const WorkspaceContext = createContext<WorkspaceValue | null>(null)
@@ -72,6 +75,23 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     'rag-starter.workspace',
     EMPTY,
   )
+
+  const { user } = useAuth()
+  const userId = user?.id ?? null
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([])
+
+  const refreshWorkspaces = useCallback(async () => {
+    const list = await listWorkspaces()
+    setWorkspaces(list.map((w) => ({ id: w.id, name: w.name })))
+  }, [])
+
+  useEffect(() => {
+    if (!userId) {
+      setWorkspaces([])
+      return
+    }
+    refreshWorkspaces().catch(() => setWorkspaces([]))
+  }, [userId, refreshWorkspaces])
 
   const toggleKb = useCallback(
     (id: string) =>
@@ -136,32 +156,28 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     [setState],
   )
   const createWorkspace = useCallback(
-    (name: string) =>
-      setState((s) => {
-        const id = `ws_${Date.now()}`
-        return {
-          ...s,
-          workspaces: [...s.workspaces, { id, name }],
-          currentWorkspaceId: id,
-        }
-      }),
-    [setState],
+    async (name: string) => {
+      const created = await apiCreateWorkspace(name)
+      await refreshWorkspaces()
+      setState((s) => ({ ...s, currentWorkspaceId: created.id }))
+    },
+    [refreshWorkspaces, setState],
   )
   const renameWorkspace = useCallback(
-    (id: string, name: string) =>
-      setState((s) => ({
-        ...s,
-        workspaces: s.workspaces.map((w) => (w.id === id ? { ...w, name } : w)),
-      })),
-    [setState],
+    async (id: string, name: string) => {
+      await apiUpdateWorkspace(id, name)
+      await refreshWorkspaces()
+    },
+    [refreshWorkspaces],
   )
 
   const value = useMemo<WorkspaceValue>(() => {
     const allTags = [...DEFAULT_TAGS, ...state.customTags]
     const currentWorkspace =
-      state.workspaces.find((w) => w.id === state.currentWorkspaceId) ?? state.workspaces[0]
+      workspaces.find((w) => w.id === state.currentWorkspaceId) ?? workspaces[0]
     return {
       ...state,
+      workspaces,
       allTags,
       currentWorkspace,
       toggleKb,
@@ -179,6 +195,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
   }, [
     state,
+    workspaces,
     toggleKb,
     toggleDoc,
     togglePin,
