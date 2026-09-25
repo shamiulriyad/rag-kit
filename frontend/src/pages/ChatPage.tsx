@@ -25,7 +25,6 @@ import {
   type KnowledgeBaseSummary,
   type Source,
 } from '../services/api'
-import { suggestedPrompts } from '../lib/mockData'
 import { relativeTime } from '../lib/format'
 import { useActivity } from '../lib/activity'
 import { useWorkspace } from '../lib/workspace'
@@ -80,6 +79,14 @@ const toSource = (s: ChatSourceDto): Source => ({
   page: s.page,
   score: s.relevanceScore,
 })
+
+/** Starter questions for an empty chat: generic prompts, not answers or document content. */
+const suggestedPrompts = [
+  'Summarize the key ideas in three bullet points.',
+  'What does the document say about configuration?',
+  'List every limitation mentioned in the text.',
+  'Explain the retrieval pipeline step by step.',
+]
 
 export default function ChatPage() {
   const { log } = useActivity()
