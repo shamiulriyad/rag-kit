@@ -256,8 +256,8 @@ export default function TeamPage() {
               Send invitation
             </Button>
             <span className="field__hint">
-              Email delivery is <strong>Coming Soon</strong>. If the person already has an
-              account they are added right away; otherwise the invitation stays pending.
+              The person needs an account first - ask them to sign up, then invite them with the
+              email they used. They are added to the workspace right away.
             </span>
           </form>
         </section>
