@@ -62,7 +62,11 @@ public class KnowledgeBasesController : ApiControllerBase
     }
 
     [HttpGet("{id:guid}/documents")]
-    public async Task<ActionResult> Documents(Guid id, CancellationToken ct) => Success(await _documents.ListAsync(id, CurrentUserId, ct));
+    public async Task<ActionResult> Documents(Guid id, [FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct)
+    {
+        var (items, total) = await _documents.ListAsync(id, CurrentUserId, Backend.DTOs.Common.PageQuery.From(page, pageSize), ct);
+        return Paged(items, total);
+    }
 
     /// <summary>POST /api/knowledge-bases/{id}/documents - stream a PDF through to the RAG
     /// service. The size ceiling is enforced globally by Kestrel/FormOptions (Upload:MaxBytes).</summary>
