@@ -99,6 +99,15 @@ function isEnvelope(body: unknown): body is ApiEnvelope<unknown> {
 // endpoints (e.g. /api/health) return a raw object instead; those pass
 // through unchanged since they have no `success` field to detect.
 export async function request<T>(path: string, init?: RequestInit, isRetry = false): Promise<T> {
+  return (await requestFull<T>(path, init, isRetry)).data
+}
+
+/** Same as request(), but also hands back the Response so callers can read headers (X-Total-Count). */
+export async function requestFull<T>(
+  path: string,
+  init?: RequestInit,
+  isRetry = false,
+): Promise<{ data: T; res: Response }> {
   let res: Response
   try {
     res = await fetch(`${BASE_URL}${path}`, withAuth(init))
@@ -116,7 +125,7 @@ export async function request<T>(path: string, init?: RequestInit, isRetry = fal
     !path.startsWith('/api/auth/')
   ) {
     const newToken = await refreshHandler()
-    if (newToken) return request<T>(path, init, true)
+    if (newToken) return requestFull<T>(path, init, true)
   }
 
   if (!res.ok) throw new ApiError(res.status, await readError(res))
@@ -124,9 +133,9 @@ export async function request<T>(path: string, init?: RequestInit, isRetry = fal
   const body = await res.json()
   if (isEnvelope(body)) {
     if (!body.success) throw new ApiError(res.status, body.message ?? 'Request failed.')
-    return body.data as T
+    return { data: body.data as T, res }
   }
-  return body as T
+  return { data: body as T, res }
 }
 
 export function checkHealth(): Promise<Health> {
@@ -174,6 +183,18 @@ export function listChatSessions(): Promise<ChatSessionSummary[]> {
   return request('/api/chat/sessions')
 }
 
+export interface Paged<T> {
+  items: T[]
+  /** Rows that exist in total; larger than items.length when the server capped the page. */
+  total: number
+}
+
+/** First page (up to 200) of conversations plus the real total, for the history view. */
+export async function listChatSessionsPage(): Promise<Paged<ChatSessionSummary>> {
+  const { data, res } = await requestFull<ChatSessionSummary[]>('/api/chat-history')
+  return { items: data, total: Number(res.headers.get('X-Total-Count') ?? data.length) }
+}
+
 export function getChatSession(id: string): Promise<{ session: ChatSessionSummary; messages: ChatMessageDto[] }> {
   return request(`/api/chat/sessions/${id}`)
 }
@@ -219,6 +240,8 @@ export interface UserProfile {
   createdAt: string
   updatedAt: string
   lastLoginAt: string | null
+  /** True once the user has opened the emailed verification link (or finished a password reset). */
+  emailVerified: boolean
 }
 
 export interface AuthResponse {
@@ -534,3 +557,110 @@ export function removeWorkspaceMember(id: string, memberId: string): Promise<voi
   return request(`/api/workspaces/${id}/members/${memberId}`, { method: 'DELETE' })
 }
 
+// --- Account recovery & email verification ---------------------------------
+
+/** Always resolves for a well-formed email - the server never says whether an account exists. */
+export async function forgotPassword(email: string): Promise<void> {
+  await request<void>('/api/auth/forgot-password', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ email }),
+  })
+}
+
+export async function resetPassword(token: string, newPassword: string): Promise<void> {
+  await request<void>('/api/auth/reset-password', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ token, newPassword }),
+  })
+}
+
+export async function verifyEmail(token: string): Promise<void> {
+  await request<void>('/api/auth/verify-email', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ token }),
+  })
+}
+
+export async function resendVerification(): Promise<void> {
+  await request<void>('/api/auth/resend-verification', { method: 'POST' })
+}
+
+// --- API keys (backend/Controllers/ApiKeysController.cs) -------------------
+// Send a key as `X-API-Key: <key>` or `Authorization: Bearer <key>`.
+
+export interface ApiKeyItem {
+  id: string
+  name: string
+  /** First characters of the key - enough to recognise it; the full key is only shown once. */
+  prefix: string
+  lastUsedAt: string | null
+  expiresAt: string | null
+  createdAt: string
+}
+
+export interface CreatedApiKey {
+  id: string
+  name: string
+  /** The full secret. Returned only by the create call - it cannot be retrieved again. */
+  rawKey: string
+  createdAt: string
+}
+
+export function listApiKeys(): Promise<ApiKeyItem[]> {
+  return request<ApiKeyItem[]>('/api/api-keys')
+}
+
+export function createApiKey(name: string): Promise<CreatedApiKey> {
+  return request<CreatedApiKey>('/api/api-keys', {
+    method: 'POST',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ name }),
+  })
+}
+
+export async function revokeApiKey(id: string): Promise<void> {
+  await request<void>(`/api/api-keys/${id}`, { method: 'DELETE' })
+}
+
+// --- Per-user RAG settings (backend/Controllers/SettingsController.cs) -----
+// Chunking applies to documents processed after saving; retrieval applies to the next question.
+// Pro and Team plans only - the server answers 422 with an upgrade message on Free.
+
+export interface UserSettings {
+  theme: string
+  defaultModel: string
+  embeddingModel: string
+  chunkSize: number
+  chunkOverlap: number
+  topK: number
+  similarityThreshold: number
+  temperature: number
+}
+
+export type RagSettingsPatch = Partial<
+  Pick<UserSettings, 'chunkSize' | 'chunkOverlap' | 'topK' | 'similarityThreshold'>
+>
+
+export function getSettings(): Promise<UserSettings> {
+  return request<UserSettings>('/api/settings')
+}
+
+export function updateSettings(patch: RagSettingsPatch): Promise<UserSettings> {
+  return request<UserSettings>('/api/settings', {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(patch),
+  })
+}
+
+/** Ends every other session and returns a fresh token pair for this device. */
+export function changePassword(currentPassword: string, newPassword: string): Promise<AuthResponse> {
+  return request<AuthResponse>('/api/users/me/password', {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({ currentPassword, newPassword }),
+  })
+}
