@@ -67,7 +67,7 @@ Documents are processed once. Every question is embedded with the *same* model a
     body: `You can ingest a document two ways.
 
 ## From the UI
-Drag a PDF onto the **Documents** page. React sends it to \`POST /api/documents/upload\` on the .NET API, which streams it to the Python service's \`/ingest\` endpoint.
+Drag a PDF onto the **Documents** page. React sends it to \`POST /api/knowledge-bases/{id}/documents\` on the .NET API, which stores the file and queues it; a background worker then streams it to the Python service's \`/api/kb/{collection}/ingest\` endpoint.
 
 ## From the CLI (developer fallback)
 \`\`\`bash
@@ -147,10 +147,21 @@ The prompt instructs the model to answer **only** from the provided context and 
     body: `The .NET API is the only backend the frontend knows about.
 
 \`\`\`
-POST /api/documents/upload   → forwards to Python /ingest
-POST /api/chat               → forwards to Python /query
-GET  /api/health             → aggregates API + RAG status
+POST /api/knowledge-bases/{id}/documents       → stored, queued, then sent to Python /api/kb/{collection}/ingest
+POST /api/chat/sessions/{id}/messages          → forwards to Python /api/kb/{collection}/query
+GET  /api/health                               → aggregates API + RAG status
 \`\`\`
+
+Authenticate with the access token from \`POST /api/auth/login\`, or with an API key created on the **Developer Portal**:
+
+\`\`\`
+curl https://your-host/api/knowledge-bases -H "X-API-Key: rsk_live_..."
+# or: -H "Authorization: Bearer rsk_live_..."
+\`\`\`
+
+A key acts as its owner (same plan limits and Knowledge Base access). It cannot manage keys, change the password or plan, or reach the admin API.
+
+The Python service is internal: it requires the shared secret in \`RAG_API_KEY\` (sent by the backend as \`X-Rag-Api-Key\`) and should never be exposed to the internet.
 
 Upload limits are enforced here first:
 
