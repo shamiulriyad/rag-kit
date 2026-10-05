@@ -61,7 +61,19 @@ if (string.IsNullOrWhiteSpace(jwt.Secret))
     builder.Configuration["Jwt:Secret"] = jwt.Secret;
 }
 
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+// "Smart" routes each request: an API key (X-API-Key, or Bearer rsk_...) goes to the ApiKey
+// handler, everything else to JWT validation. See Authentication/ApiKeyAuthenticationHandler.
+builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultScheme = "Smart";
+        options.DefaultChallengeScheme = "Smart";
+    })
+    .AddPolicyScheme("Smart", "JWT or API key", o =>
+        o.ForwardDefaultSelector = ctx => ApiKeyAuthenticationHandler.LooksLikeApiKey(ctx.Request)
+            ? ApiKeyAuthenticationHandler.Scheme
+            : JwtBearerDefaults.AuthenticationScheme)
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(
+        ApiKeyAuthenticationHandler.Scheme, null)
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
@@ -105,8 +117,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 builder.Services.AddSingleton<Backend.Authentication.AdminAccess>();
 builder.Services.AddAuthorization(o =>
+{
     o.AddPolicy(Backend.Authentication.AdminAccess.Policy, p =>
-        p.RequireClaim(Backend.Authentication.JwtTokenService.PlatformAdminClaim, "true")));
+        p.RequireClaim(Backend.Authentication.JwtTokenService.PlatformAdminClaim, "true"));
+    // Account-level actions need a real signed-in session, not an API key.
+    o.AddPolicy(ApiKeyAuthenticationHandler.SessionOnlyPolicy, p => p
+        .RequireAuthenticatedUser()
+        .RequireAssertion(c => !c.User.HasClaim(ApiKeyAuthenticationHandler.MethodClaim, ApiKeyAuthenticationHandler.MethodApiKey)));
+});
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationMiddlewareResultHandler, Backend.Authentication.AdminDeniedHandler>();
 
@@ -128,10 +146,17 @@ builder.Services.Configure<FormOptions>(o =>
 // ---------------------------------------------------------------------------
 builder.Services.Configure<RagSettings>(builder.Configuration.GetSection("Rag"));
 var rag = builder.Configuration.GetSection("Rag").Get<RagSettings>() ?? new RagSettings();
+var ragApiKey = !string.IsNullOrWhiteSpace(rag.ApiKey) ? rag.ApiKey : builder.Configuration["RAG_API_KEY"];
+if (string.IsNullOrWhiteSpace(ragApiKey))
+    Console.Error.WriteLine(
+        "[startup] WARNING: Rag:ApiKey / RAG_API_KEY is not set - the Python RAG service is being " +
+        "called without authentication. Set the same RAG_API_KEY for the backend and the rag service.");
 builder.Services.AddHttpClient<IRagService, RagService>(client =>
 {
     client.BaseAddress = new Uri(rag.BaseUrl);
     client.Timeout = TimeSpan.FromSeconds(rag.TimeoutSeconds);
+    if (!string.IsNullOrWhiteSpace(ragApiKey))
+        client.DefaultRequestHeaders.Add("X-Rag-Api-Key", ragApiKey);
 });
 
 // The spec (and Supabase's own dashboard) names these flat - SUPABASE_URL, SUPABASE_ANON_KEY,
@@ -169,6 +194,13 @@ builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddSingleton<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IResourceAuthorizationService, ResourceAuthorizationService>();
 
+// Email (password reset / verification links). SMTP is optional - see Integrations/Email.
+builder.Services.Configure<Backend.Integrations.Email.EmailOptions>(builder.Configuration.GetSection("Email"));
+if (!string.IsNullOrWhiteSpace(builder.Configuration["Email:Smtp:Host"]))
+    builder.Services.AddSingleton<Backend.Integrations.Email.IEmailSender, Backend.Integrations.Email.SmtpEmailSender>();
+else
+    builder.Services.AddSingleton<Backend.Integrations.Email.IEmailSender, Backend.Integrations.Email.LogEmailSender>();
+builder.Services.AddScoped<IAccountService, AccountService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IPlanLimitService, PlanLimitService>();
@@ -205,6 +237,25 @@ builder.Services.AddHostedService<Backend.BackgroundJobs.DocumentProcessingBackg
 // ---------------------------------------------------------------------------
 builder.Services.AddMemoryCache();
 builder.Services.Configure<IpRateLimitOptions>(builder.Configuration.GetSection("IpRateLimiting"));
+
+// The limiter keys on the TCP peer address. It must NOT read a client-supplied header such as
+// X-Real-IP (anyone could rotate it to dodge the limit). Behind a reverse proxy, opt in to
+// ForwardedHeaders and list the proxy addresses you trust: ForwardedHeaders__Enabled=true,
+// ForwardedHeaders__KnownProxies__0=10.0.0.5 - the real client IP is then taken from X-Forwarded-For
+// only when the request comes from one of those proxies.
+var forwardedEnabled = builder.Configuration.GetValue<bool>("ForwardedHeaders:Enabled");
+if (forwardedEnabled)
+{
+    builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(o =>
+    {
+        o.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+                             | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+        o.KnownNetworks.Clear();
+        o.KnownProxies.Clear();
+        foreach (var proxy in builder.Configuration.GetSection("ForwardedHeaders:KnownProxies").Get<string[]>() ?? [])
+            if (System.Net.IPAddress.TryParse(proxy, out var ip)) o.KnownProxies.Add(ip);
+    });
+}
 builder.Services.AddInMemoryRateLimiting();
 builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
@@ -214,7 +265,7 @@ builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>()
 const string CorsPolicy = "frontend";
 var origins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? ["http://localhost:5173"];
 builder.Services.AddCors(o => o.AddPolicy(CorsPolicy, p =>
-    p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod()));
+    p.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().WithExposedHeaders("X-Total-Count")));
 
 builder.Services.AddControllers();
 
@@ -288,9 +339,27 @@ using (var scope = app.Services.CreateScope())
 app.UseMiddleware<ExceptionHandlingMiddleware>(); // must be first: catches everything below
 app.UseMiddleware<RequestLoggingMiddleware>();
 
-app.UseSwagger();
-app.UseSwaggerUI();
+// The API docs are a map of every endpoint - on in Development, or when Swagger:Enabled=true.
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Swagger:Enabled"))
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
+// Baseline hardening headers for every API response (the API only serves JSON).
+app.Use(async (ctx, next) =>
+{
+    var h = ctx.Response.Headers;
+    h["X-Content-Type-Options"] = "nosniff";
+    h["X-Frame-Options"] = "DENY";
+    h["Referrer-Policy"] = "no-referrer";
+    h["Content-Security-Policy"] = ctx.Request.Path.StartsWithSegments("/swagger")
+        ? "default-src 'self' 'unsafe-inline' data:"
+        : "default-src 'none'; frame-ancestors 'none'";
+    await next();
+});
+
+if (forwardedEnabled) app.UseForwardedHeaders();
 app.UseMiddleware<Backend.Services.RecordingIpRateLimitMiddleware>();
 app.UseCors(CorsPolicy);
 app.UseAuthentication();
