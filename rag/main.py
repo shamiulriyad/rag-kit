@@ -26,6 +26,7 @@ ingest/query return 501 and you use the `python ingest.py`/`ask.py` CLIs instead
 (single global collection, for quick local experimentation only).
 """
 
+import hmac
 import os
 import re
 import tempfile
@@ -35,12 +36,13 @@ from typing import List, Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 import config
 from api.chat import KnowledgeBaseNotIndexedError, answer_question
 from api.health import qdrant_is_healthy
-from api.ingest import ScannedPdfError, ingest_document
+from api.ingest import ScannedPdfError, UnreadablePdfError, ingest_document
 from rag.step05_embedding import get_embeddings
 from rag.step06_vector_store import delete_collection, delete_document
 from rag.step10_generate import get_llm
@@ -70,6 +72,20 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="RAG Starter - Python RAG service", lifespan=lifespan)
+
+if not config.RAG_API_KEY:
+    print("[startup] WARNING: RAG_API_KEY is not set - this service accepts unauthenticated "
+          "requests. Set the same RAG_API_KEY here and in the backend (Rag__ApiKey / RAG_API_KEY).")
+
+
+@app.middleware("http")
+async def require_api_key(request: Request, call_next):
+    """Only the .NET backend may call this service. /health stays open for probes."""
+    if config.RAG_API_KEY and request.url.path != "/health":
+        supplied = request.headers.get("x-rag-api-key", "")
+        if not hmac.compare_digest(supplied.encode(), config.RAG_API_KEY.encode()):
+            return JSONResponse({"detail": "Missing or invalid API key."}, status_code=401)
+    return await call_next(request)
 
 # Matches the collection names the .NET backend derives from a Knowledge Base id
 # (`kb_<32 hex chars>`) plus the legacy single-tenant default - guards against
@@ -191,7 +207,7 @@ async def ingest(
             embeddings=_state["embeddings"],
         )
         return IngestOut(**result)
-    except ScannedPdfError as exc:
+    except (ScannedPdfError, UnreadablePdfError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except HTTPException:
         raise
