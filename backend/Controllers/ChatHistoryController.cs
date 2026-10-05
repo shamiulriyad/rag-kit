@@ -17,11 +17,18 @@ public class ChatHistoryController : ApiControllerBase
     public ChatHistoryController(IChatService chat) => _chat = chat;
 
     [HttpGet]
-    public async Task<ActionResult> List(CancellationToken ct) => Success(await _chat.ListSessionsAsync(CurrentUserId, ct));
+    public async Task<ActionResult> List([FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct)
+    {
+        var (items, total) = await _chat.ListSessionsAsync(CurrentUserId, Backend.DTOs.Common.PageQuery.From(page, pageSize), ct);
+        return Paged(items, total);
+    }
 
     [HttpGet("search")]
-    public async Task<ActionResult> Search([FromQuery] string q, CancellationToken ct) =>
-        Success(await _chat.SearchSessionsAsync(CurrentUserId, q ?? "", ct));
+    public async Task<ActionResult> Search([FromQuery] string q, [FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct)
+    {
+        var (items, total) = await _chat.SearchSessionsAsync(CurrentUserId, q ?? "", Backend.DTOs.Common.PageQuery.From(page, pageSize), ct);
+        return Paged(items, total);
+    }
 
     [HttpPut("{id:guid}")]
     public async Task<ActionResult> Rename(Guid id, [FromBody] RenameChatSessionRequest request, CancellationToken ct) =>
