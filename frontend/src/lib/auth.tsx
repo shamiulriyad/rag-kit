@@ -38,6 +38,10 @@ interface AuthValue {
   signIn: (email: string, password: string) => Promise<void>
   signUp: (fullName: string, email: string, password: string) => Promise<void>
   signOut: () => void
+  /** Re-reads the profile from the API (e.g. after verifying the email). */
+  refreshUser: () => Promise<void>
+  /** Replaces the stored session, e.g. with the fresh tokens a password change returns. */
+  adoptSession: (res: AuthResponse) => void
 }
 
 const STORAGE_KEY = 'rag-starter.auth.session'
@@ -77,17 +81,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Registers with services/api.ts so a 401 anywhere triggers one silent
   // refresh-and-retry instead of immediately logging the user out.
   useEffect(() => {
-    setRefreshHandler(async () => {
-      const stored = readStored()
-      if (!stored) return null
-      try {
-        const res = await apiRefreshTokens(stored.refreshToken)
-        persistAuthResponse(res)
-        return res.accessToken
-      } catch {
-        persist(null)
-        return null
-      }
+    // Single flight: several requests can hit a 401 at once. Rotating the refresh token once per
+    // request would replay an already-used token, which the server treats as theft and answers by
+    // signing the account out everywhere. All concurrent callers share one refresh instead.
+    let inflight: Promise<string | null> | null = null
+    setRefreshHandler(() => {
+      inflight ??= (async () => {
+        const stored = readStored()
+        if (!stored) return null
+        try {
+          const res = await apiRefreshTokens(stored.refreshToken)
+          persistAuthResponse(res)
+          return res.accessToken
+        } catch {
+          persist(null)
+          return null
+        }
+      })().finally(() => {
+        inflight = null
+      })
+      return inflight
     })
     return () => setRefreshHandler(null)
   }, [persist, persistAuthResponse])
@@ -138,9 +151,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (current) apiLogout(current.refreshToken).catch(() => {})
   }, [session, persist])
 
+  const refreshUser = useCallback(async () => {
+    const stored = readStored()
+    if (!stored) return
+    const user = await getMe()
+    persist({ ...stored, user })
+  }, [persist])
+
   const value = useMemo<AuthValue>(
-    () => ({ user: session?.user ?? null, ready, signIn, signUp, signOut }),
-    [session, ready, signIn, signUp, signOut],
+    () => ({
+      user: session?.user ?? null,
+      ready,
+      signIn,
+      signUp,
+      signOut,
+      refreshUser,
+      adoptSession: persistAuthResponse,
+    }),
+    [session, ready, signIn, signUp, signOut, refreshUser, persistAuthResponse],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
