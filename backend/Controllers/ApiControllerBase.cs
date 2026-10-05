@@ -17,6 +17,13 @@ public abstract class ApiControllerBase : ControllerBase
     protected ActionResult Success<T>(T data, string? message = null) =>
         Ok(ApiResponse<T>.Ok(data, message));
 
+    /// <summary>A list result plus the unpaged row count in <c>X-Total-Count</c>.</summary>
+    protected ActionResult Paged<T>(IReadOnlyList<T> items, int total)
+    {
+        Response.Headers["X-Total-Count"] = total.ToString();
+        return Success(items);
+    }
+
     protected ActionResult Success(string? message = null) =>
         Ok(ApiResponse.Ok(message));
 }
