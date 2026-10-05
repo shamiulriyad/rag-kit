@@ -4,7 +4,7 @@ import { Search, MessagesSquare, Pencil, Trash2, ArrowUpRight, FileText, BookOpe
 import {
   ApiError,
   deleteChatSession,
-  listChatSessions,
+  listChatSessionsPage,
   listDocuments,
   listKnowledgeBases,
   renameChatSession,
@@ -24,6 +24,7 @@ export default function ChatHistoryPage() {
   const navigate = useNavigate()
   const toast = useToast()
   const [sessions, setSessions] = useState<ChatSessionSummary[]>([])
+  const [total, setTotal] = useState(0)
   const [kbs, setKbs] = useState<KnowledgeBaseSummary[]>([])
   const [docsByKb, setDocsByKb] = useState<Record<string, DocumentRecord[]>>({})
   const [loading, setLoading] = useState(true)
@@ -33,10 +34,12 @@ export default function ChatHistoryPage() {
 
   useEffect(() => {
     let cancelled = false
-    Promise.all([listChatSessions(), listKnowledgeBases()])
-      .then(async ([sessionList, kbList]) => {
+    Promise.all([listChatSessionsPage(), listKnowledgeBases()])
+      .then(async ([page, kbList]) => {
         if (cancelled) return
+        const sessionList = page.items
         setSessions(sessionList)
+        setTotal(page.total)
         setKbs(kbList)
         const usedKbIds = [...new Set(sessionList.map((s) => s.knowledgeBaseId))]
         const docLists = await Promise.all(
@@ -123,6 +126,12 @@ export default function ChatHistoryPage() {
 
   return (
     <div className="page">
+      {total > sessions.length && (
+        <p className="muted" style={{ fontSize: '0.85rem' }}>
+          Showing your {sessions.length.toLocaleString()} most recent conversations of {total.toLocaleString()}.
+          Delete old ones you no longer need to see the rest.
+        </p>
+      )}
       <div className="toolbar">
         <div className="search">
           <Search />
