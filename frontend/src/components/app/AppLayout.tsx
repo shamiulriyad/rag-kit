@@ -7,6 +7,7 @@ import ShortcutsModal from './ShortcutsModal'
 import NotificationBell from '../notifications/NotificationBell'
 import CommandPalette from '../search/CommandPalette'
 import StatusPill from '../ui/StatusPill'
+import VerifyEmailBanner from './VerifyEmailBanner'
 import { usePlatformStatus } from '../../lib/platformStatus'
 import { useUI } from '../../lib/ui'
 
@@ -96,6 +97,7 @@ export default function AppLayout() {
           </div>
         </header>
 
+        <VerifyEmailBanner />
         <Outlet />
       </div>
 
