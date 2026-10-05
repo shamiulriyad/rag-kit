@@ -47,7 +47,10 @@ export default function LoginPage() {
           )}
         </Field>
 
-        <Field label="Password">
+        <Field
+          label="Password"
+          hint={<Link to="/forgot-password">Forgot your password?</Link>}
+        >
           {(id) => (
             <Input
               id={id}
