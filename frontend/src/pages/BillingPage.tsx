@@ -67,7 +67,9 @@ export default function BillingPage() {
   const fmtDate = (d: Date) =>
     d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
-  const upgradeTargets = (['pro', 'team'] as PlanId[]).filter((p) => p !== plan)
+  // Only plans above the current one are upgrades (a Team customer is not offered Pro).
+  const ladder: PlanId[] = ['free', 'pro', 'team']
+  const upgradeTargets = ladder.filter((p) => ladder.indexOf(p) > ladder.indexOf(plan))
 
   return (
     <div className="page">
@@ -136,6 +138,7 @@ export default function BillingPage() {
       </section>
 
       {/* Upgrade options */}
+      {upgradeTargets.length > 0 && (
       <section className="card">
         <div className="panel-head">
           <h3>Upgrade options</h3>
@@ -199,6 +202,7 @@ export default function BillingPage() {
           .
         </p>
       </section>
+      )}
     </div>
   )
 }
