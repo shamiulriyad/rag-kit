@@ -913,6 +913,9 @@ namespace backend.Data.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
 
+                    b.Property<DateTimeOffset?>("EmailVerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("FullName")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -997,6 +1000,44 @@ namespace backend.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("user_settings", (string)null);
+                });
+
+            modelBuilder.Entity("Backend.Models.UserToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.HasIndex("UserId", "Purpose");
+
+                    b.ToTable("user_tokens", (string)null);
                 });
 
             modelBuilder.Entity("Backend.Models.Workspace", b =>
@@ -1305,6 +1346,17 @@ namespace backend.Data.Migrations
                 });
 
             modelBuilder.Entity("Backend.Models.UserSettings", b =>
+                {
+                    b.HasOne("Backend.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Backend.Models.UserToken", b =>
                 {
                     b.HasOne("Backend.Models.User", "User")
                         .WithMany()
