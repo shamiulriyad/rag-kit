@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { KeyRound, Save, RotateCcw, Check, Moon, Sun, Monitor, ShieldCheck, LogOut } from 'lucide-react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
+import { KeyRound, Save, RotateCcw, Check, Moon, Sun, Monitor, ShieldCheck, LogOut, Info } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Field, Input, Select } from '../components/ui/Field'
 import { useToast } from '../components/ui/Toast'
@@ -10,41 +10,11 @@ import { useTheme, type ThemePref } from '../lib/theme'
 import { useAuth } from '../lib/auth'
 import { useWorkspace } from '../lib/workspace'
 import { initials } from '../lib/format'
+import { changePassword, getSettings, updateSettings, type RagSettingsPatch } from '../services/api'
 
-interface Config {
-  llmProvider: string
-  geminiModel: string
-  embeddingProvider: string
-  embeddingModel: string
-  qdrantUrl: string
-  collection: string
-  chunkSize: number
-  chunkOverlap: number
-  topK: number
-}
-
-const DEFAULTS: Config = {
-  llmProvider: 'gemini',
-  geminiModel: 'gemini-1.5-pro',
-  embeddingProvider: 'huggingface',
-  embeddingModel: 'BAAI/bge-m3',
-  qdrantUrl: 'http://qdrant:6333',
-  collection: 'rag_documents',
-  chunkSize: 800,
-  chunkOverlap: 120,
-  topK: 5,
-}
-
-const STORAGE_KEY = 'rag-starter.settings'
-
-function load(): Config {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : DEFAULTS
-  } catch {
-    return DEFAULTS
-  }
-}
+/** What the backend uses when a customer has never changed anything (UserSettings defaults). */
+const RAG_DEFAULTS = { chunkSize: 1000, chunkOverlap: 150, topK: 4, similarityThreshold: 0 }
+type RagForm = typeof RAG_DEFAULTS
 
 const SECTIONS = [
   { id: 'profile', label: 'Profile' },
@@ -63,58 +33,118 @@ const THEME_OPTIONS: { id: ThemePref; label: string; icon: typeof Moon }[] = [
   { id: 'system', label: 'System', icon: Monitor },
 ]
 
+const errText = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback)
+
 export default function SettingsPage() {
   const toast = useToast()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
-  const { plan, changePlan } = usePlan()
+  const { plan, changePlan, isFree } = usePlan()
   const checkout = useCheckout()
   const { pref, setPref } = useTheme()
-  const { user, signOut } = useAuth()
+  const { user, signOut, adoptSession } = useAuth()
   const { workspaces, currentWorkspace, switchWorkspace, renameWorkspace } = useWorkspace()
   const [wsName, setWsName] = useState<string | null>(null)
   const [wsError, setWsError] = useState<string | null>(null)
-  const [cfg, setCfg] = useState<Config>(load)
+
+  // RAG settings live on the server (per account), not in the browser.
+  const [rag, setRag] = useState<RagForm>(RAG_DEFAULTS)
+  const [ragLoad, setRagLoad] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [ragError, setRagError] = useState<string | null>(null)
+  const [ragSaving, setRagSaving] = useState(false)
+
+  // Password change
+  const [curPw, setCurPw] = useState('')
+  const [newPw, setNewPw] = useState('')
+  const [newPw2, setNewPw2] = useState('')
+  const [pwError, setPwError] = useState<string | null>(null)
+  const [pwBusy, setPwBusy] = useState(false)
+
   const tabParam = params.get('tab')
   const [active, setActive] = useState(
     SECTIONS.some((s) => s.id === tabParam) ? (tabParam as string) : 'profile',
   )
+
+  useEffect(() => {
+    let cancelled = false
+    getSettings()
+      .then((s) => {
+        if (cancelled) return
+        setRag({
+          chunkSize: s.chunkSize,
+          chunkOverlap: s.chunkOverlap,
+          topK: s.topK,
+          similarityThreshold: s.similarityThreshold,
+        })
+        setRagLoad('ready')
+      })
+      .catch((e) => {
+        if (cancelled) return
+        setRagError(errText(e, 'Could not load your settings.'))
+        setRagLoad('error')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   function selectTab(id: string) {
     setActive(id)
     setParams(id === 'profile' ? {} : { tab: id }, { replace: true })
   }
 
-  function set<K extends keyof Config>(key: K, value: Config[K]) {
-    setCfg((c) => ({ ...c, [key]: value }))
+  function setField<K extends keyof RagForm>(key: K, value: RagForm[K]) {
+    setRag((c) => {
+      const next = { ...c, [key]: value }
+      // The server rejects overlap >= size, so keep the sliders consistent instead.
+      if (next.chunkOverlap >= next.chunkSize) next.chunkOverlap = Math.max(0, next.chunkSize - 50)
+      return next
+    })
   }
 
-  function save() {
+  async function saveRag() {
+    setRagSaving(true)
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg))
-      toast('ok', 'UI configuration saved to this browser.')
-    } catch {
-      toast('err', 'Could not write to localStorage.')
+      const patch: RagSettingsPatch = { ...rag }
+      const saved = await updateSettings(patch)
+      setRag({
+        chunkSize: saved.chunkSize,
+        chunkOverlap: saved.chunkOverlap,
+        topK: saved.topK,
+        similarityThreshold: saved.similarityThreshold,
+      })
+      toast('ok', 'Saved. Retrieval changes apply to your next question; chunking applies to documents processed from now on.')
+    } catch (e) {
+      toast('err', errText(e, 'Could not save your settings.'))
+    } finally {
+      setRagSaving(false)
     }
   }
 
-  function reset() {
-    setCfg(DEFAULTS)
-    toast('ok', 'Reverted to default configuration.')
+  async function onChangePassword(e: FormEvent) {
+    e.preventDefault()
+    setPwError(null)
+    if (newPw.length < 8) return setPwError('New password must be at least 8 characters.')
+    if (newPw !== newPw2) return setPwError('The two new passwords do not match.')
+    setPwBusy(true)
+    try {
+      // Every other session is ended server-side; this device gets a fresh session and stays in.
+      adoptSession(await changePassword(curPw, newPw))
+      setCurPw('')
+      setNewPw('')
+      setNewPw2('')
+      toast('ok', 'Password updated. Your other devices were signed out.')
+    } catch (err) {
+      setPwError(errText(err, 'Could not change the password.'))
+    } finally {
+      setPwBusy(false)
+    }
   }
+
+  const ragLocked = isFree
 
   return (
     <div className="page">
-      <div className="secret-note">
-        <KeyRound />
-        <span>
-          These panels edit <strong>UI preferences only</strong>, stored in your
-          browser. The values the running system actually uses — API keys, the
-          real Qdrant URL, model names — come from the backend <code>.env</code>{' '}
-          and are never entered or displayed here.
-        </span>
-      </div>
-
       <div className="settings-grid">
         <nav className="settings-nav">
           {SECTIONS.map((s) => (
@@ -218,7 +248,7 @@ export default function SettingsPage() {
                           setWsName(null)
                           toast('ok', 'Workspace renamed.')
                         } catch (e) {
-                          setWsError(e instanceof Error ? e.message : 'Could not rename the workspace.')
+                          setWsError(errText(e, 'Could not rename the workspace.'))
                         }
                       }}
                     >
@@ -231,100 +261,47 @@ export default function SettingsPage() {
           )}
 
           {active === 'models' && (
-            <>
-              <div className="card settings-section">
-                <h3>LLM provider</h3>
-                <div className="form-grid">
-                  <Field label="Provider" hint="Set LLM_PROVIDER in backend .env">
-                    {(id) => (
-                      <Select
-                        id={id}
-                        value={cfg.llmProvider}
-                        onChange={(e) => set('llmProvider', e.target.value)}
-                      >
-                        <option value="gemini">Google Gemini</option>
-                        <option value="openai">OpenAI (compatible)</option>
-                        <option value="local">Local / self-hosted</option>
-                      </Select>
-                    )}
-                  </Field>
-                  <Field label="Gemini model" hint="GEMINI_MODEL">
-                    {(id) => (
-                      <Select
-                        id={id}
-                        value={cfg.geminiModel}
-                        onChange={(e) => set('geminiModel', e.target.value)}
-                      >
-                        <option>gemini-1.5-pro</option>
-                        <option>gemini-1.5-flash</option>
-                        <option>gemini-1.0-pro</option>
-                      </Select>
-                    )}
-                  </Field>
-                </div>
+            <div className="card settings-section">
+              <h3>AI models</h3>
+              <div className="secret-note">
+                <Info />
+                <span>
+                  The language model and the embedding model are chosen once for the whole server, by
+                  whoever runs it. They are not per-account settings, so there is nothing to change here.
+                </span>
               </div>
-
-              <div className="card settings-section">
-                <h3>Embeddings</h3>
-                <div className="form-grid">
-                  <Field label="Embedding provider" hint="EMBEDDING_PROVIDER">
-                    {(id) => (
-                      <Select
-                        id={id}
-                        value={cfg.embeddingProvider}
-                        onChange={(e) => set('embeddingProvider', e.target.value)}
-                      >
-                        <option value="huggingface">HuggingFace (local)</option>
-                        <option value="gemini">Gemini embeddings</option>
-                        <option value="openai">OpenAI embeddings</option>
-                      </Select>
-                    )}
-                  </Field>
-                  <Field
-                    label="Embedding model"
-                    hint="EMBEDDING_MODEL — keep multilingual for Bangla / mixed docs"
-                  >
-                    {(id) => (
-                      <Input
-                        id={id}
-                        value={cfg.embeddingModel}
-                        onChange={(e) => set('embeddingModel', e.target.value)}
-                      />
-                    )}
-                  </Field>
-                </div>
-              </div>
-            </>
+              <dl className="kv">
+                <dt>Answer model</dt>
+                <dd className="mono">LLM_MODEL (server .env)</dd>
+                <dt>Embedding model</dt>
+                <dd className="mono">EMBEDDING_PROVIDER / EMBEDDING_MODEL (server .env)</dd>
+              </dl>
+              <p className="muted" style={{ fontSize: '0.85rem' }}>
+                Changing the embedding model on a server that already holds documents means every document
+                has to be re-indexed (use <strong>Reprocess</strong> on each one), because vectors from
+                different models cannot be compared.
+              </p>
+            </div>
           )}
 
           {active === 'storage' && (
             <div className="card settings-section">
               <h3>Storage &amp; vector database</h3>
-              <div className="form-grid">
-                <Field
-                  label="Qdrant URL"
-                  full
-                  hint="QDRANT_URL — server mode. In Docker use the service name (http://qdrant:6333); for local dev use http://localhost:6333."
-                >
-                  {(id) => (
-                    <Input
-                      id={id}
-                      className="input mono"
-                      value={cfg.qdrantUrl}
-                      onChange={(e) => set('qdrantUrl', e.target.value)}
-                    />
-                  )}
-                </Field>
-                <Field label="Collection name" hint="QDRANT_COLLECTION">
-                  {(id) => (
-                    <Input
-                      id={id}
-                      value={cfg.collection}
-                      onChange={(e) => set('collection', e.target.value)}
-                    />
-                  )}
-                </Field>
+              <div className="secret-note">
+                <Info />
+                <span>
+                  Storage locations are configured by whoever runs the server, so they are shown here as
+                  information only.
+                </span>
               </div>
+              <dl className="kv">
+                <dt>Uploaded PDFs</dt>
+                <dd>Supabase Storage when configured, otherwise the server's local disk</dd>
+                <dt>Embeddings</dt>
+                <dd>Qdrant, one collection per Knowledge Base</dd>
+                <dt>Application data</dt>
+                <dd>Postgres (accounts, Knowledge Bases, chats, usage)</dd>
+              </dl>
             </div>
           )}
 
@@ -335,90 +312,186 @@ export default function SettingsPage() {
                 <span className="pill">Advanced</span>
               </div>
               <p className="muted" style={{ fontSize: '0.85rem' }}>
-                These control how documents are chunked and retrieved. Most customers never need
-                to touch this — the defaults work well for typical PDFs.
+                These control how your documents are chunked and retrieved. They are saved to your account
+                and used by the server. Most customers never need to touch them — the defaults work well for
+                typical PDFs.
               </p>
-              <Field
-                label="Chunk size"
-                hint="Characters per chunk before embedding (CHUNK_SIZE)"
-              >
-                {(id) => (
-                  <div className="slider-row">
-                    <input
-                      id={id}
-                      className="slider"
-                      type="range"
-                      min={200}
-                      max={2000}
-                      step={50}
-                      value={cfg.chunkSize}
-                      onChange={(e) => set('chunkSize', Number(e.target.value))}
-                    />
-                    <output>{cfg.chunkSize}</output>
-                  </div>
-                )}
-              </Field>
-              <Field
-                label="Chunk overlap"
-                hint="Characters shared between adjacent chunks (CHUNK_OVERLAP)"
-              >
-                {(id) => (
-                  <div className="slider-row">
-                    <input
-                      id={id}
-                      className="slider"
-                      type="range"
-                      min={0}
-                      max={400}
-                      step={10}
-                      value={cfg.chunkOverlap}
-                      onChange={(e) => set('chunkOverlap', Number(e.target.value))}
-                    />
-                    <output>{cfg.chunkOverlap}</output>
-                  </div>
-                )}
-              </Field>
-              <Field
-                label="Top-K retrieval"
-                hint="How many chunks are retrieved and passed to Gemini (TOP_K)"
-              >
-                {(id) => (
-                  <div className="slider-row">
-                    <input
-                      id={id}
-                      className="slider"
-                      type="range"
-                      min={1}
-                      max={12}
-                      step={1}
-                      value={cfg.topK}
-                      onChange={(e) => set('topK', Number(e.target.value))}
-                    />
-                    <output>{cfg.topK}</output>
-                  </div>
-                )}
-              </Field>
+
+              {ragLocked && (
+                <div className="secret-note">
+                  <Info />
+                  <span>
+                    Changing these needs the Pro or Team plan.{' '}
+                    <Link to="/billing">See plans</Link>. The values below are what your account uses now.
+                  </span>
+                </div>
+              )}
+              {ragLoad === 'error' && (
+                <div className="state state--error">
+                  <h3>Couldn't load your settings</h3>
+                  <p className="muted">{ragError}</p>
+                </div>
+              )}
+
+              {ragLoad !== 'error' && (
+                <fieldset
+                  disabled={ragLocked || ragLoad === 'loading'}
+                  style={{ border: 0, padding: 0, margin: 0, display: 'contents' }}
+                >
+                  <Field
+                    label="Chunk size"
+                    hint="Characters per chunk. Applies to documents processed after you save — Reprocess existing ones to re-chunk them."
+                  >
+                    {(id) => (
+                      <div className="slider-row">
+                        <input
+                          id={id}
+                          className="slider"
+                          type="range"
+                          min={200}
+                          max={2000}
+                          step={50}
+                          value={rag.chunkSize}
+                          onChange={(e) => setField('chunkSize', Number(e.target.value))}
+                        />
+                        <output>{rag.chunkSize}</output>
+                      </div>
+                    )}
+                  </Field>
+                  <Field label="Chunk overlap" hint="Characters shared between adjacent chunks. Always smaller than the chunk size.">
+                    {(id) => (
+                      <div className="slider-row">
+                        <input
+                          id={id}
+                          className="slider"
+                          type="range"
+                          min={0}
+                          max={400}
+                          step={10}
+                          value={rag.chunkOverlap}
+                          onChange={(e) => setField('chunkOverlap', Number(e.target.value))}
+                        />
+                        <output>{rag.chunkOverlap}</output>
+                      </div>
+                    )}
+                  </Field>
+                  <Field label="Top-K retrieval" hint="How many chunks are retrieved and handed to the model for each question.">
+                    {(id) => (
+                      <div className="slider-row">
+                        <input
+                          id={id}
+                          className="slider"
+                          type="range"
+                          min={1}
+                          max={12}
+                          step={1}
+                          value={rag.topK}
+                          onChange={(e) => setField('topK', Number(e.target.value))}
+                        />
+                        <output>{rag.topK}</output>
+                      </div>
+                    )}
+                  </Field>
+                  <Field
+                    label="Minimum similarity"
+                    hint="Chunks scoring below this are ignored. 0 keeps every retrieved chunk; raise it to cut weak matches."
+                  >
+                    {(id) => (
+                      <div className="slider-row">
+                        <input
+                          id={id}
+                          className="slider"
+                          type="range"
+                          min={0}
+                          max={0.9}
+                          step={0.05}
+                          value={rag.similarityThreshold}
+                          onChange={(e) => setField('similarityThreshold', Number(e.target.value))}
+                        />
+                        <output>{rag.similarityThreshold.toFixed(2)}</output>
+                      </div>
+                    )}
+                  </Field>
+                </fieldset>
+              )}
             </div>
           )}
 
           {active === 'security' && (
-            <div className="card settings-section">
-              <h3>Security</h3>
-              <dl className="kv">
-                <dt>Authentication</dt>
-                <dd>Email &amp; password (demo — stored in this browser only)</dd>
-                <dt>Signed in as</dt>
-                <dd>{user?.email}</dd>
-                <dt>Two-factor authentication</dt>
-                <dd>
-                  <span className="pill">Coming Soon</span>
-                </dd>
-              </dl>
-              <Button variant="ghost" onClick={signOut}>
-                <ShieldCheck size={15} />
-                Sign out of this device
-              </Button>
-            </div>
+            <>
+              <div className="card settings-section">
+                <h3>Change password</h3>
+                <form onSubmit={onChangePassword} className="stack" style={{ gap: 'var(--sp-4)' }}>
+                  <Field label="Current password">
+                    {(id) => (
+                      <Input
+                        id={id}
+                        type="password"
+                        autoComplete="current-password"
+                        value={curPw}
+                        onChange={(e) => setCurPw(e.target.value)}
+                        required
+                        maxLength={128}
+                      />
+                    )}
+                  </Field>
+                  <Field label="New password" hint="At least 8 characters. Common passwords are refused.">
+                    {(id) => (
+                      <Input
+                        id={id}
+                        type="password"
+                        autoComplete="new-password"
+                        value={newPw}
+                        onChange={(e) => setNewPw(e.target.value)}
+                        required
+                        minLength={8}
+                        maxLength={128}
+                      />
+                    )}
+                  </Field>
+                  <Field label="Confirm new password" error={pwError ?? undefined}>
+                    {(id) => (
+                      <Input
+                        id={id}
+                        type="password"
+                        autoComplete="new-password"
+                        value={newPw2}
+                        onChange={(e) => setNewPw2(e.target.value)}
+                        required
+                        maxLength={128}
+                      />
+                    )}
+                  </Field>
+                  <div>
+                    <Button type="submit" loading={pwBusy}>
+                      <KeyRound size={15} />
+                      Update password
+                    </Button>
+                  </div>
+                  <span className="field__hint">
+                    Changing your password signs you out of every other device.
+                  </span>
+                </form>
+              </div>
+
+              <div className="card settings-section">
+                <h3>Account security</h3>
+                <dl className="kv">
+                  <dt>Signed in as</dt>
+                  <dd>{user?.email}</dd>
+                  <dt>Email address</dt>
+                  <dd>{user?.emailVerified ? 'Verified' : 'Not verified yet'}</dd>
+                  <dt>Two-factor authentication</dt>
+                  <dd>
+                    <span className="pill">Coming Soon</span>
+                  </dd>
+                </dl>
+                <Button variant="ghost" onClick={signOut}>
+                  <ShieldCheck size={15} />
+                  Sign out of this device
+                </Button>
+              </div>
+            </>
           )}
 
           {active === 'billing' && (
@@ -437,10 +510,8 @@ export default function SettingsPage() {
               <div className="secret-note">
                 <KeyRound />
                 <span>
-                  Billing is not implemented yet. There is no Stripe integration,
-                  no subscription backend and no invoices — switching plans here
-                  only updates this browser so the product experience can be
-                  explored. Real payments are planned for a future release.
+                  No payment provider is connected yet. The checkout is a demo: it can change your plan
+                  limits (when the server allows it) but never charges anything and there are no invoices.
                 </span>
               </div>
 
@@ -475,10 +546,14 @@ export default function SettingsPage() {
                         variant={current || id === 'free' ? 'secondary' : 'primary'}
                         block
                         disabled={current}
-                        onClick={() => {
+                        onClick={async () => {
                           if (id === 'free') {
-                            changePlan(id)
-                            toast('ok', 'Switched to the Free plan.')
+                            try {
+                              await changePlan(id)
+                              toast('ok', 'Switched to the Free plan.')
+                            } catch (e) {
+                              toast('err', errText(e, 'Could not change your plan.'))
+                            }
                             return
                           }
                           checkout.open(id, async () => {
@@ -504,36 +579,33 @@ export default function SettingsPage() {
             <div className="card settings-section">
               <h3>API Keys</h3>
               <p className="muted">
-                Backend secrets are intentionally not editable from the UI — set them in the
-                backend environment and restart the affected service.
+                Create, copy and revoke your personal API keys on the{' '}
+                <Link to="/developer">Developer Portal</Link>. Use them to call RAG Starter from your own code.
               </p>
-              <dl className="kv">
-                <dt>GEMINI_API_KEY</dt>
-                <dd className="mono">•••••••••••••••• &nbsp;(backend .env)</dd>
-                <dt>QDRANT_API_KEY</dt>
-                <dd className="mono">optional — set for Qdrant Cloud</dd>
-                <dt>Upload__MaxBytes</dt>
-                <dd className="mono">.NET request limit</dd>
-                <dt>MAX_UPLOAD_MB</dt>
-                <dd className="mono">Python request limit</dd>
-              </dl>
               <p className="muted" style={{ fontSize: '0.85rem' }}>
-                To generate personal API keys for calling RAG Starter programmatically, use the{' '}
-                <Button variant="ghost" onClick={() => navigate('/developer')}>
-                  Developer Portal
-                </Button>
-                .
+                Server secrets — the Gemini key, the Qdrant key, the shared RAG service key — are
+                intentionally not shown or editable from the app. They live in the server's environment.
               </p>
+              <Button variant="secondary" onClick={() => navigate('/developer')}>
+                Open the Developer Portal
+              </Button>
             </div>
           )}
 
-          {(active === 'models' || active === 'storage' || active === 'rag') && (
+          {active === 'rag' && ragLoad !== 'error' && (
             <div style={{ display: 'flex', gap: 'var(--sp-3)' }}>
-              <Button onClick={save}>
+              <Button onClick={saveRag} loading={ragSaving} disabled={ragLocked || ragLoad === 'loading'}>
                 <Save size={15} />
-                Save preferences
+                Save settings
               </Button>
-              <Button variant="secondary" onClick={reset}>
+              <Button
+                variant="secondary"
+                disabled={ragLocked || ragLoad === 'loading'}
+                onClick={() => {
+                  setRag(RAG_DEFAULTS)
+                  toast('ok', 'Defaults loaded - press Save to apply them.')
+                }}
+              >
                 <RotateCcw size={15} />
                 Reset to defaults
               </Button>
