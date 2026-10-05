@@ -14,4 +14,9 @@ public class RagSettings
     /// PDF can take minutes, so this is deliberately generous.
     /// </summary>
     public int TimeoutSeconds { get; set; } = 600;
+
+    /// <summary>Shared secret sent as <c>X-Rag-Api-Key</c> on every call. Must equal the Python
+    /// service's <c>RAG_API_KEY</c>; without it anyone who can reach the RAG port can read,
+    /// ingest into or delete any Knowledge Base's collection. Also read from <c>RAG_API_KEY</c>.</summary>
+    public string? ApiKey { get; set; }
 }
