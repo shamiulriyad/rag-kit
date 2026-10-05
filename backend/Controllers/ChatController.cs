@@ -19,7 +19,11 @@ public class ChatController : ApiControllerBase
         Success(await _chat.CreateSessionAsync(CurrentUserId, request, ct), "Conversation started.");
 
     [HttpGet("sessions")]
-    public async Task<ActionResult> ListSessions(CancellationToken ct) => Success(await _chat.ListSessionsAsync(CurrentUserId, ct));
+    public async Task<ActionResult> ListSessions([FromQuery] int? page, [FromQuery] int? pageSize, CancellationToken ct)
+    {
+        var (items, total) = await _chat.ListSessionsAsync(CurrentUserId, Backend.DTOs.Common.PageQuery.From(page, pageSize), ct);
+        return Paged(items, total);
+    }
 
     [HttpGet("sessions/{id:guid}")]
     public async Task<ActionResult> GetSession(Guid id, CancellationToken ct) => Success(await _chat.GetSessionAsync(id, CurrentUserId, ct));
