@@ -1,3 +1,4 @@
+using Backend.DTOs.Common;
 using Backend.Authorization;
 using Backend.Data;
 using Backend.DTOs.Documents;
@@ -11,7 +12,7 @@ namespace Backend.Services;
 
 public interface IDocumentService
 {
-    Task<List<DocumentResponse>> ListAsync(Guid knowledgeBaseId, Guid userId, CancellationToken ct);
+    Task<(List<DocumentResponse> Items, int Total)> ListAsync(Guid knowledgeBaseId, Guid userId, PageQuery page, CancellationToken ct);
     Task<DocumentResponse> GetAsync(Guid id, Guid userId, CancellationToken ct);
     Task<DocumentResponse> UploadAsync(Guid knowledgeBaseId, Guid userId, IFormFile file, CancellationToken ct);
     Task DeleteAsync(Guid id, Guid userId, CancellationToken ct);
@@ -58,12 +59,13 @@ public class DocumentService : IDocumentService
         _log = log;
     }
 
-    public async Task<List<DocumentResponse>> ListAsync(Guid knowledgeBaseId, Guid userId, CancellationToken ct)
+    public async Task<(List<DocumentResponse> Items, int Total)> ListAsync(Guid knowledgeBaseId, Guid userId, PageQuery page, CancellationToken ct)
     {
         await _auth.GetKnowledgeBaseAsync(knowledgeBaseId, userId, ct: ct);
-        var docs = await _db.Documents.Where(d => d.KnowledgeBaseId == knowledgeBaseId)
-            .OrderByDescending(d => d.CreatedAt).ToListAsync(ct);
-        return docs.Select(Map).ToList();
+        var query = _db.Documents.Where(d => d.KnowledgeBaseId == knowledgeBaseId);
+        var total = await query.CountAsync(ct);
+        var docs = await query.OrderByDescending(d => d.CreatedAt).Skip(page.Skip).Take(page.PageSize).ToListAsync(ct);
+        return (docs.Select(Map).ToList(), total);
     }
 
     public async Task<DocumentResponse> GetAsync(Guid id, Guid userId, CancellationToken ct)
@@ -90,6 +92,13 @@ public class DocumentService : IDocumentService
         }
 
         var kb = await _auth.GetKnowledgeBaseAsync(knowledgeBaseId, userId, ct: ct);
+
+        var fileName = Path.GetFileName(file.FileName);
+        if (await _db.Documents.AnyAsync(d => d.KnowledgeBaseId == knowledgeBaseId && d.FileName == fileName
+                                               && d.FileSize == file.Length && d.Status != DocumentStatus.Failed, ct))
+            throw new ConflictException(
+                $"\"{fileName}\" is already in this Knowledge Base. Delete the existing copy first if you want to replace it.");
+
         await _limits.EnsureCanUploadDocumentAsync(kb.OwnerId, file.Length, ct);
 
         var document = new Document
@@ -265,6 +274,18 @@ public class DocumentService : IDocumentService
             var result = await _rag.IngestAsync(
                 kb.QdrantCollectionName, document.Id, pdf, document.FileName,
                 settings?.ChunkSize ?? 1000, settings?.ChunkOverlap ?? 150, ct);
+
+            // The chunk count is only known now. Over the plan's limit: take the vectors back out
+            // and fail the document with a clear reason instead of silently exceeding the plan.
+            try
+            {
+                await _limits.EnsureChunksWithinLimitAsync(kb.OwnerId, document.Id, result.Chunks, ct);
+            }
+            catch (PlanLimitExceededException)
+            {
+                await _rag.DeleteDocumentAsync(kb.QdrantCollectionName, document.Id, ct);
+                throw;
+            }
 
             // Counted once, the first time a document is ever successfully processed - not
             // on every reprocess/retry.
