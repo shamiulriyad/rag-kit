@@ -24,8 +24,8 @@ public record CreateChatSessionRequest(
 public record RenameChatSessionRequest([Required, MinLength(1), MaxLength(300)] string Title);
 
 public record AskMessageRequest(
-    [Required, MinLength(1)] string Question,
-    int? TopK);
+    [Required, MinLength(1), MaxLength(4000, ErrorMessage = "Questions can be at most 4000 characters.")] string Question,
+    [Range(1, 20, ErrorMessage = "TopK must be between 1 and 20.")] int? TopK);
 
 /// <summary>Matches the exact shape given in the spec's Chat API section: an answer plus
 /// sources carrying documentId/documentName/page/relevanceScore/excerpt.</summary>
