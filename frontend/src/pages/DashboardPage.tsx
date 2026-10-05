@@ -145,7 +145,7 @@ export default function DashboardPage() {
           <div className="panel-head">
             <h3>System health</h3>
             <StatusPill
-              status="ok"
+              status={apiOnline === null ? 'processing' : apiOnline ? 'ok' : 'failed'}
               label={
                 apiOnline === null
                   ? 'Checking…'
@@ -159,13 +159,18 @@ export default function DashboardPage() {
             {healthRows.map((r) => {
               const state = health[r.key]
               const up = state === 'healthy'
+              // Until the first answer arrives these are unknown, not down.
+              const checking = apiOnline === null
               return (
                 <div className="health__row" key={r.key}>
                   <div>
                     <div>{r.name}</div>
-                    <div className="list__meta">{state ?? 'unknown'}</div>
+                    <div className="list__meta">{checking ? 'checking…' : (state ?? 'unknown')}</div>
                   </div>
-                  <StatusPill status={up ? 'ok' : 'failed'} label={up ? undefined : 'Down'} />
+                  <StatusPill
+                    status={checking ? 'processing' : up ? 'ok' : 'failed'}
+                    label={checking ? 'Checking…' : up ? undefined : 'Down'}
+                  />
                 </div>
               )
             })}
