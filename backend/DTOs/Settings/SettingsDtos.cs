@@ -9,9 +9,9 @@ public record UserSettingsResponse(
     int ChunkSize, int ChunkOverlap, int TopK, double SimilarityThreshold, double Temperature);
 
 public record UpdateUserSettingsRequest(
-    string? Theme,
-    string? DefaultModel,
-    string? EmbeddingModel,
+    [RegularExpression("^(light|dark|system)$", ErrorMessage = "Theme must be light, dark or system.")] string? Theme,
+    [RegularExpression(@"^[A-Za-z0-9._/:-]{1,100}$", ErrorMessage = "Model name contains invalid characters.")] string? DefaultModel,
+    [RegularExpression(@"^[A-Za-z0-9._/:-]{1,100}$", ErrorMessage = "Model name contains invalid characters.")] string? EmbeddingModel,
     [Range(100, 4000)] int? ChunkSize,
     [Range(0, 1000)] int? ChunkOverlap,
     [Range(1, 20)] int? TopK,
