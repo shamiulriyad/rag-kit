@@ -17,6 +17,11 @@ class ScannedPdfError(ValueError):
     """Raised when a PDF has little/no extractable text (spec: scanned PDFs need OCR)."""
 
 
+class UnreadablePdfError(ValueError):
+    """Raised when the file cannot be parsed as a PDF at all (corrupt, truncated, encrypted).
+    Deterministic: retrying the same bytes will never help, so it is reported as a 4xx."""
+
+
 def ingest_document(
     *, collection_name: str, document_id: str, pdf_path: Path, filename: str,
     chunk_size: int, chunk_overlap: int, embeddings,
@@ -28,7 +33,20 @@ def ingest_document(
     with `document_id` so it can be deleted independently later (see
     step06_vector_store.delete_document).
     """
-    pages = clean_documents(extract_text(load_pdf(pdf_path)))          # 1-3
+    try:
+        raw_pages = extract_text(load_pdf(pdf_path))                    # 1-2
+    except Exception as exc:  # noqa: BLE001 - any parser failure means the file is unusable
+        raise UnreadablePdfError(
+            "This PDF could not be read - it may be corrupt, truncated or password-protected. "
+            "Re-export it from the original program and try again."
+        ) from exc
+    if not raw_pages:
+        raise UnreadablePdfError(
+            "This PDF contains no readable pages - it may be corrupt or empty. "
+            "Re-export it from the original program and try again."
+        )
+
+    pages = clean_documents(raw_pages)                                  # 3
     extractable = sum(len(p.page_content) for p in pages)
     if not pages or extractable < config.MIN_TEXT_CHARS:
         raise ScannedPdfError(
