@@ -1,55 +1,78 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
-import { KeyRound, Plus, Trash2, BookOpen, Webhook, PackageOpen, Terminal } from 'lucide-react'
+import { Copy, KeyRound, Plus, Trash2, BookOpen, Webhook, PackageOpen, Terminal } from 'lucide-react'
 import { Button } from '../components/ui/Button'
+import { Field, Input } from '../components/ui/Field'
 import { useToast } from '../components/ui/Toast'
 import { GithubIcon } from '../components/ui/icons'
-import { useLocalStorage } from '../lib/hooks'
-import { getUsage } from '../services/api'
+import { createApiKey, getUsage, listApiKeys, revokeApiKey, type ApiKeyItem } from '../services/api'
 import { formatNumber } from '../lib/format'
-
-interface ApiKey {
-  id: string
-  label: string
-  key: string
-  createdAt: string
-}
-
-function maskKey(key: string) {
-  return `${key.slice(0, 8)}${'•'.repeat(20)}${key.slice(-4)}`
-}
-
-function genKey() {
-  return `rsk_${Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`
-}
+import { relativeTime } from '../lib/format'
 
 export default function DeveloperPortalPage() {
+  const toast = useToast()
   const [questionsThisMonth, setQuestionsThisMonth] = useState(0)
+  const [keys, setKeys] = useState<ApiKeyItem[] | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [name, setName] = useState('')
+  const [creating, setCreating] = useState(false)
+  /** The just-created secret. Shown once; the server only keeps a hash. */
+  const [fresh, setFresh] = useState<{ name: string; rawKey: string } | null>(null)
+
+  const load = useCallback(() => {
+    listApiKeys()
+      .then((k) => {
+        setKeys(k)
+        setLoadError(null)
+      })
+      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Could not load API keys.'))
+  }, [])
+
   useEffect(() => {
     getUsage()
       .then((u) => setQuestionsThisMonth(u.questionsThisMonth))
       .catch(() => {})
-  }, [])
-  const toast = useToast()
-  const [keys, setKeys] = useLocalStorage<ApiKey[]>('rag-starter.dev.keys', [])
+    load()
+  }, [load])
 
-  function createKey() {
-    const label = window.prompt('Name this API key (e.g. "Local dev")')
-    if (!label?.trim()) return
-    const key: ApiKey = {
-      id: `key_${Date.now()}`,
-      label: label.trim(),
-      key: genKey(),
-      createdAt: new Date().toISOString(),
+  async function onCreate(e: FormEvent) {
+    e.preventDefault()
+    const label = name.trim()
+    if (label.length < 2) {
+      toast('err', 'Give the key a name of at least 2 characters.')
+      return
     }
-    setKeys((k) => [key, ...k])
-    toast('ok', 'API key created. Demo only — it is not wired to a real backend yet.')
+    setCreating(true)
+    try {
+      const created = await createApiKey(label)
+      setFresh({ name: created.name, rawKey: created.rawKey })
+      setName('')
+      load()
+    } catch (err) {
+      toast('err', err instanceof Error ? err.message : 'Could not create the key.')
+    } finally {
+      setCreating(false)
+    }
   }
 
-  function revokeKey(id: string) {
-    if (!window.confirm('Revoke this API key?')) return
-    setKeys((k) => k.filter((x) => x.id !== id))
-    toast('ok', 'Key revoked.')
+  async function onRevoke(k: ApiKeyItem) {
+    if (!window.confirm(`Revoke "${k.name}"? Anything using it will stop working immediately.`)) return
+    try {
+      await revokeApiKey(k.id)
+      toast('ok', 'Key revoked.')
+      load()
+    } catch (err) {
+      toast('err', err instanceof Error ? err.message : 'Could not revoke the key.')
+    }
+  }
+
+  async function copy(text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+      toast('ok', 'Copied to the clipboard.')
+    } catch {
+      toast('err', 'Could not copy - select the key and copy it manually.')
+    }
   }
 
   return (
@@ -66,18 +89,66 @@ export default function DeveloperPortalPage() {
       <section className="card">
         <div className="panel-head">
           <h3>API Keys</h3>
-          <Button onClick={createKey}>
+        </div>
+        <p className="muted" style={{ fontSize: '0.86rem' }}>
+          Send a key as <code>X-API-Key: &lt;key&gt;</code> or <code>Authorization: Bearer &lt;key&gt;</code>.
+          A key acts as you (same plan limits and Knowledge Bases) but cannot manage keys, change
+          your password or plan, or reach the admin API.
+        </p>
+
+        <form onSubmit={onCreate} style={{ display: 'flex', gap: 'var(--sp-3)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 240px' }}>
+            <Field label="New key name">
+              {(id) => (
+                <Input
+                  id={id}
+                  placeholder='e.g. "Local dev"'
+                  value={name}
+                  maxLength={100}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              )}
+            </Field>
+          </div>
+          <Button type="submit" loading={creating}>
             <Plus size={15} />
             Create key
           </Button>
-        </div>
-        {keys.length === 0 ? (
+        </form>
+
+        {fresh && (
+          <div className="secret-note" style={{ flexDirection: 'column', gap: 'var(--sp-2)' }}>
+            <strong>Copy "{fresh.name}" now - it won't be shown again.</strong>
+            <div style={{ display: 'flex', gap: 'var(--sp-3)', alignItems: 'center', flexWrap: 'wrap' }}>
+              <code className="mono" style={{ wordBreak: 'break-all' }}>{fresh.rawKey}</code>
+              <Button type="button" variant="secondary" size="sm" onClick={() => copy(fresh.rawKey)}>
+                <Copy size={14} />
+                Copy
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setFresh(null)}>
+                I've saved it
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {loadError ? (
+          <div className="state">
+            <h3>Couldn't load your keys</h3>
+            <p className="muted">{loadError}</p>
+            <Button variant="secondary" onClick={load}>Try again</Button>
+          </div>
+        ) : keys === null ? (
+          <div className="state">
+            <span className="spinner" />
+          </div>
+        ) : keys.length === 0 ? (
           <div className="state">
             <span className="state__icon">
               <KeyRound />
             </span>
             <h3>No API keys yet</h3>
-            <p className="muted">Create one to authenticate requests against the RAG Starter API.</p>
+            <p className="muted">Create one to call the RAG Starter API from your own code.</p>
           </div>
         ) : (
           <div className="list">
@@ -87,10 +158,14 @@ export default function DeveloperPortalPage() {
                   <KeyRound />
                 </span>
                 <div className="grow" style={{ minWidth: 0 }}>
-                  <div className="truncate">{k.label}</div>
-                  <div className="list__meta mono">{maskKey(k.key)}</div>
+                  <div className="truncate">{k.name}</div>
+                  <div className="list__meta mono">{k.prefix}</div>
+                  <div className="list__meta">
+                    Created {relativeTime(k.createdAt)} ·{' '}
+                    {k.lastUsedAt ? `last used ${relativeTime(k.lastUsedAt)}` : 'never used'}
+                  </div>
                 </div>
-                <button className="iconbtn" aria-label="Revoke" onClick={() => revokeKey(k.id)}>
+                <button className="iconbtn" aria-label={`Revoke ${k.name}`} onClick={() => onRevoke(k)}>
                   <Trash2 size={15} />
                 </button>
               </div>
