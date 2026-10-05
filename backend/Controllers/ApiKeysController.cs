@@ -7,7 +7,7 @@ namespace Backend.Controllers;
 
 [Route("api/api-keys")]
 [Tags("Users")]
-[Authorize]
+[Authorize(Policy = Backend.Authentication.ApiKeyAuthenticationHandler.SessionOnlyPolicy)]
 public class ApiKeysController : ApiControllerBase
 {
     private readonly IApiKeyService _keys;
