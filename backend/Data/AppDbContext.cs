@@ -42,6 +42,7 @@ public class AppDbContext : DbContext
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<UserSettings> UserSettings => Set<UserSettings>();
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+    public DbSet<UserToken> UserTokens => Set<UserToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
