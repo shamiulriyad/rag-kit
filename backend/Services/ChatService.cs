@@ -1,3 +1,4 @@
+using Backend.DTOs.Common;
 using Backend.Data;
 using Backend.DTOs.Chat;
 using Backend.Helpers;
@@ -8,8 +9,8 @@ namespace Backend.Services;
 
 public interface IChatService
 {
-    Task<List<ChatSessionResponse>> ListSessionsAsync(Guid userId, CancellationToken ct);
-    Task<List<ChatSessionResponse>> SearchSessionsAsync(Guid userId, string query, CancellationToken ct);
+    Task<(List<ChatSessionResponse> Items, int Total)> ListSessionsAsync(Guid userId, PageQuery page, CancellationToken ct);
+    Task<(List<ChatSessionResponse> Items, int Total)> SearchSessionsAsync(Guid userId, string query, PageQuery page, CancellationToken ct);
     Task<ChatSessionDetailResponse> GetSessionAsync(Guid id, Guid userId, CancellationToken ct);
     Task<ChatSessionResponse> CreateSessionAsync(Guid userId, CreateChatSessionRequest request, CancellationToken ct);
     Task<ChatSessionResponse> RenameSessionAsync(Guid id, Guid userId, RenameChatSessionRequest request, CancellationToken ct);
@@ -39,11 +40,11 @@ public class ChatService : IChatService
         _activity = activity;
     }
 
-    public Task<List<ChatSessionResponse>> ListSessionsAsync(Guid userId, CancellationToken ct) =>
-        QuerySessionsAsync(userId, null, ct);
+    public Task<(List<ChatSessionResponse> Items, int Total)> ListSessionsAsync(Guid userId, PageQuery page, CancellationToken ct) =>
+        QuerySessionsAsync(userId, null, page, ct);
 
-    public Task<List<ChatSessionResponse>> SearchSessionsAsync(Guid userId, string query, CancellationToken ct) =>
-        QuerySessionsAsync(userId, query.Trim(), ct);
+    public Task<(List<ChatSessionResponse> Items, int Total)> SearchSessionsAsync(Guid userId, string query, PageQuery page, CancellationToken ct) =>
+        QuerySessionsAsync(userId, query.Trim(), page, ct);
 
     public async Task<ChatSessionDetailResponse> GetSessionAsync(Guid id, Guid userId, CancellationToken ct)
     {
@@ -167,17 +168,21 @@ public class ChatService : IChatService
 
     // Filter and order on the entity, and only then project into the DTO - EF cannot translate
     // an OrderBy/Where written against the constructed record.
-    private async Task<List<ChatSessionResponse>> QuerySessionsAsync(Guid userId, string? titleContains, CancellationToken ct)
+    private async Task<(List<ChatSessionResponse> Items, int Total)> QuerySessionsAsync(
+        Guid userId, string? titleContains, PageQuery page, CancellationToken ct)
     {
         var sessions = _db.ChatSessions.Where(s => s.UserId == userId);
         if (!string.IsNullOrEmpty(titleContains))
             sessions = sessions.Where(s => EF.Functions.ILike(s.Title, $"%{titleContains}%"));
 
-        return await sessions
+        var total = await sessions.CountAsync(ct);
+        var items = await sessions
             .OrderByDescending(s => s.UpdatedAt)
+            .Skip(page.Skip).Take(page.PageSize)
             .Select(s => new ChatSessionResponse(
                 s.Id, s.KnowledgeBaseId, s.KnowledgeBase!.Name, s.Title, s.Messages.Count, s.CreatedAt, s.UpdatedAt))
             .ToListAsync(ct);
+        return (items, total);
     }
 
     private static string ShortTitle(string question) =>
