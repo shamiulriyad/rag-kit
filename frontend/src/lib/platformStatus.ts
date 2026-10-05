@@ -5,6 +5,8 @@ export interface PlatformStatus {
   maintenanceMode: boolean
   maintenanceMessage: string
   signupsEnabled: boolean
+  /** Whether this server can actually deliver emails (reset and verification links). */
+  emailEnabled: boolean
 }
 
 /** What the operator has switched on or off (maintenance, sign-ups). null until the first answer, and
