@@ -26,6 +26,10 @@ public interface IPlanLimitService
     Task RecordQuestionAskedAsync(Guid userId, CancellationToken ct);
     Task RecordDocumentUploadedAsync(Guid userId, long fileSize, CancellationToken ct);
     Task RecordDocumentChunkedAsync(Guid userId, int chunkCount, CancellationToken ct);
+
+    /// <summary>Throws if indexing <paramref name="newChunks"/> for <paramref name="documentId"/>
+    /// would take the owner past the plan's chunk limit (the document's own old chunks do not count).</summary>
+    Task EnsureChunksWithinLimitAsync(Guid userId, Guid documentId, int newChunks, CancellationToken ct);
 }
 
 public class PlanLimitService : IPlanLimitService
@@ -98,6 +102,20 @@ public class PlanLimitService : IPlanLimitService
         await _db.SaveChangesAsync(ct);
     }
 
+    public async Task EnsureChunksWithinLimitAsync(Guid userId, Guid documentId, int newChunks, CancellationToken ct)
+    {
+        var plan = await GetPlanAsync(userId, ct);
+        var kbIds = await _db.KnowledgeBases.Where(k => k.OwnerId == userId).Select(k => k.Id).ToListAsync(ct);
+        var others = await _db.Documents
+            .Where(d => kbIds.Contains(d.KnowledgeBaseId) && d.Id != documentId)
+            .SumAsync(d => d.ChunkCount ?? 0, ct);
+
+        if (others + newChunks > plan.MaxChunks)
+            throw new PlanLimitExceededException(
+                $"Indexing this document ({newChunks:N0} chunks) would exceed your {plan.Name} plan's limit of " +
+                $"{plan.MaxChunks:N0} chunks ({others:N0} already used). Remove a document or upgrade.");
+    }
+
     public async Task RecordDocumentChunkedAsync(Guid userId, int chunkCount, CancellationToken ct)
     {
         var usage = await GetOrCreateCurrentMonthAsync(userId, ct);
@@ -118,7 +136,11 @@ public class PlanLimitService : IPlanLimitService
         var kbIds = await _db.KnowledgeBases.Where(k => k.OwnerId == userId).Select(k => k.Id).ToListAsync(ct);
         var docs = await _db.Documents.Where(d => kbIds.Contains(d.KnowledgeBaseId)).ToListAsync(ct);
 
-        return (docs.Count, docs.Sum(d => d.FileSize), docs.Sum(d => d.ChunkCount ?? 0), kbIds.Count);
+        // A document that failed to process is not a usable document: it must not eat the document
+        // quota. Its stored file still counts toward storage, so failed uploads cannot be used to
+        // fill the disk for free.
+        return (docs.Count(d => d.Status != DocumentStatus.Failed), docs.Sum(d => d.FileSize),
+            docs.Sum(d => d.ChunkCount ?? 0), kbIds.Count);
     }
 
     private async Task<UsageRecord> GetOrCreateCurrentMonthAsync(Guid userId, CancellationToken ct)
