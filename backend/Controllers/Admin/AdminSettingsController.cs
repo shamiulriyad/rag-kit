@@ -53,8 +53,13 @@ public class AdminSettingsController(
 [Route("api/public/status")]
 [Tags("Public content")]
 [AllowAnonymous]
-public class PublicStatusController(IPlatformSettingsService settings) : ApiControllerBase
+public class PublicStatusController(IPlatformSettingsService settings, Backend.Integrations.Email.IEmailSender email) : ApiControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult> Get(CancellationToken ct) => Success(await settings.GetStatusAsync(ct));
+    public async Task<ActionResult> Get(CancellationToken ct)
+    {
+        var s = await settings.GetStatusAsync(ct);
+        // emailEnabled: whether reset/verification emails can actually be delivered here.
+        return Success(new { s.MaintenanceMode, s.MaintenanceMessage, s.SignupsEnabled, EmailEnabled = email.IsConfigured });
+    }
 }
