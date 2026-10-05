@@ -39,6 +39,9 @@ import { useAuth } from './lib/auth'
 import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/LoginPage'
 import SignupPage from './pages/SignupPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
+import VerifyEmailPage from './pages/VerifyEmailPage'
 import DashboardPage from './pages/DashboardPage'
 import KnowledgeBasesPage from './pages/KnowledgeBasesPage'
 import KnowledgeBaseDetailPage from './pages/KnowledgeBaseDetailPage'
@@ -178,6 +181,10 @@ export default function App() {
           </GuestOnly>
         }
       />
+      {/* Reachable signed in or out: they are opened from an email link. */}
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
 
       <Route
         element={
