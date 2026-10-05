@@ -49,15 +49,17 @@ public class KnowledgeBaseService : IKnowledgeBaseService
 
     public async Task<List<KnowledgeBaseResponse>> ListAsync(Guid userId, CancellationToken ct)
     {
-        var owned = await _db.KnowledgeBases.Where(k => k.OwnerId == userId).ToListAsync(ct);
-        var memberOf = await _db.KnowledgeBaseMembers
-            .Where(m => m.UserId == userId)
-            .Include(m => m.KnowledgeBase)
-            .Select(m => new { KnowledgeBase = m.KnowledgeBase!, m.Role })
+        // Owned, shared directly, or living in a team workspace the user belongs to.
+        var kbs = await _db.KnowledgeBases
+            .Include(k => k.Members)
+            .Include(k => k.Workspace!).ThenInclude(w => w.Members)
+            .Where(k => k.OwnerId == userId
+                        || k.Members.Any(m => m.UserId == userId)
+                        || (k.Workspace != null && !k.Workspace.IsPersonal
+                            && (k.Workspace.OwnerId == userId || k.Workspace.Members.Any(m => m.UserId == userId))))
             .ToListAsync(ct);
 
-        var results = owned.Select(k => Map(k, MemberRole.Owner))
-            .Concat(memberOf.Where(m => m.KnowledgeBase.OwnerId != userId).Select(m => Map(m.KnowledgeBase, m.Role)))
+        var results = kbs.Select(k => Map(k, RoleOf(k, userId)))
             .OrderByDescending(k => k.UpdatedAt)
             .ToList();
 
@@ -221,7 +223,7 @@ public class KnowledgeBaseService : IKnowledgeBaseService
     }
 
     private static MemberRole RoleOf(KnowledgeBase kb, Guid userId) =>
-        kb.OwnerId == userId ? MemberRole.Owner : kb.Members.FirstOrDefault(m => m.UserId == userId)?.Role ?? MemberRole.Member;
+        KnowledgeBaseAccess.RoleOf(kb, userId) ?? MemberRole.Member;
 
     private static KnowledgeBaseResponse Map(KnowledgeBase kb, MemberRole role) => new(
         kb.Id, kb.Name, kb.Description, kb.DocumentCount, kb.ChunkCount, kb.CreatedAt, kb.UpdatedAt, role.ToString());
