@@ -102,10 +102,21 @@ public class WorkspaceService : IWorkspaceService
 
     public async Task<List<WorkspaceMemberResponse>> ListMembersAsync(Guid id, Guid userId, CancellationToken ct)
     {
-        await _auth.GetWorkspaceAsync(id, userId, ct: ct);
+        var workspace = await _auth.GetWorkspaceAsync(id, userId, ct: ct);
         var members = await _db.WorkspaceMembers.Where(m => m.WorkspaceId == id).Include(m => m.User).ToListAsync(ct);
-        return members.Select(m => new WorkspaceMemberResponse(
-            m.Id, m.User?.FullName ?? m.InviteEmail, m.User?.Email ?? m.InviteEmail, m.Role.ToString(), m.Status, m.CreatedAt)).ToList();
+
+        var result = new List<WorkspaceMemberResponse>();
+
+        // The owner is not a WorkspaceMember row, but they are a member of their own workspace: list
+        // them first (id = their user id) so the team page shows everyone who has access.
+        var owner = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == workspace.OwnerId, ct);
+        if (owner is not null)
+            result.Add(new WorkspaceMemberResponse(
+                owner.Id, owner.FullName, owner.Email, MemberRole.Owner.ToString(), "active", workspace.CreatedAt));
+
+        result.AddRange(members.Select(m => new WorkspaceMemberResponse(
+            m.Id, m.User?.FullName ?? m.InviteEmail, m.User?.Email ?? m.InviteEmail, m.Role.ToString(), m.Status, m.CreatedAt)));
+        return result;
     }
 
     public async Task<WorkspaceMemberResponse> InviteAsync(Guid id, Guid userId, InviteWorkspaceMemberRequest request, CancellationToken ct)
@@ -123,17 +134,22 @@ public class WorkspaceService : IWorkspaceService
             throw new ValidationAppException("Role must be Owner, Admin, or Member.");
 
         var email = request.Email.Trim().ToLowerInvariant();
+        if (await _db.Users.AnyAsync(u => u.Id == workspace.OwnerId && u.Email == email, ct))
+            throw new ValidationAppException("That's the workspace owner - they already have full access.");
         if (await _db.WorkspaceMembers.AnyAsync(m => m.WorkspaceId == id && m.InviteEmail == email, ct))
             throw new ConflictException("This person has already been invited.");
 
-        var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct);
+        // Invitation emails are mocked, so nobody would ever be told about a pending invite
+        // for an unregistered address - only people who already have an account can be added.
+        var existingUser = await _db.Users.FirstOrDefaultAsync(u => u.Email == email, ct)
+            ?? throw new ValidationAppException("No account exists with this email. Ask them to sign up first, then invite them.");
         var member = new WorkspaceMember
         {
             WorkspaceId = id,
-            UserId = existingUser?.Id,
+            UserId = existingUser.Id,
             InviteEmail = email,
             Role = role,
-            Status = existingUser is null ? "pending" : "active",
+            Status = "active",
         };
         _db.WorkspaceMembers.Add(member);
         await _db.SaveChangesAsync(ct);
@@ -146,7 +162,9 @@ public class WorkspaceService : IWorkspaceService
 
     public async Task<WorkspaceMemberResponse> UpdateMemberRoleAsync(Guid id, Guid memberOrUserId, Guid userId, UpdateWorkspaceMemberRoleRequest request, CancellationToken ct)
     {
-        await _auth.GetWorkspaceAsync(id, userId, MemberRole.Admin, ct);
+        var workspace = await _auth.GetWorkspaceAsync(id, userId, MemberRole.Admin, ct);
+        if (memberOrUserId == workspace.OwnerId)
+            throw new ValidationAppException("The workspace owner's role can't be changed.");
 
         if (!Enum.TryParse<MemberRole>(request.Role, true, out var role))
             throw new ValidationAppException("Role must be Owner, Admin, or Member.");
@@ -168,6 +186,9 @@ public class WorkspaceService : IWorkspaceService
     public async Task RemoveMemberAsync(Guid id, Guid memberOrUserId, Guid userId, CancellationToken ct)
     {
         var workspace = await _auth.GetWorkspaceAsync(id, userId, MemberRole.Admin, ct);
+        if (memberOrUserId == workspace.OwnerId)
+            throw new ValidationAppException("The workspace owner can't be removed. Delete the workspace instead.");
+
         // Accepts either the WorkspaceMember row id or the member's User id (the spec's
         // route uses {userId}, but a pending invite has no user yet).
         var member = await _db.WorkspaceMembers.Include(m => m.User).FirstOrDefaultAsync(
