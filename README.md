@@ -32,7 +32,8 @@ holds embeddings, one collection per Knowledge Base.
 
 ```bash
 cp .env.example .env
-# then edit .env: GOOGLE_API_KEY (required), DATABASE_CONNECTION_STRING (a Supabase
+# then edit .env: GOOGLE_API_KEY (required), RAG_API_KEY (required - see "Securing it" below),
+# DATABASE_CONNECTION_STRING (a Supabase
 # or any Postgres connection string - required for accounts/data to persist), JWT_SECRET
 docker compose up --build
 ```
@@ -93,12 +94,12 @@ Activity, Analytics, Health). Summary:
 
 | Area | Endpoints |
 |------|-----------|
-| Auth | `POST /api/auth/{register,login,refresh,logout}` |
-| Users | `GET/PUT /api/users/me`, `PUT /api/users/me/password`, `GET/POST/DELETE /api/api-keys` |
+| Auth | `POST /api/auth/{register,login,refresh,logout}`, `POST /api/auth/forgot-password`, `POST /api/auth/reset-password`, `POST /api/auth/verify-email`, `POST /api/auth/resend-verification` |
+| Users | `GET/PUT /api/users/me`, `PUT /api/users/me/password`, `GET/POST/DELETE /api/api-keys` (keys authenticate with `X-API-Key: rsk_live_...` or `Authorization: Bearer rsk_live_...`) |
 | Knowledge Bases | `GET/POST /api/knowledge-bases`, `GET/PUT/DELETE /api/knowledge-bases/{id}`, `GET /api/knowledge-bases/{id}/stats`, member CRUD |
 | Documents | `GET/POST /api/knowledge-bases/{id}/documents`, `GET/DELETE /api/documents/{id}`, `POST /api/documents/{id}/reprocess` |
 | Chat | `POST/GET /api/chat/sessions`, `GET/DELETE /api/chat/sessions/{id}`, `POST /api/chat/sessions/{id}/messages`, `GET /api/chat-history`, `GET /api/chat-history/search`, `PUT/DELETE /api/chat-history/{id}` |
-| Billing | `GET /api/billing/{plans,subscription,usage}`, `POST /api/billing/mock-activate` (dev-only, no payment provider yet) |
+| Billing | `GET /api/billing/{plans,subscription,usage}`, `POST /api/billing/mock-activate` (Development only unless `Billing__AllowMockActivation=true`; no payment provider yet) |
 | Teams | `GET/POST/PUT/DELETE /api/workspaces`, member invite (mocked email)/remove |
 | Notifications | `GET /api/notifications`, `PUT .../{id}/read`, `PUT .../read-all` |
 | Settings | `GET/PUT /api/settings` (chunk size/overlap, top-k, similarity threshold, temperature, models) |
@@ -173,8 +174,35 @@ Design rules it follows:
 | Service | File | Key settings |
 |---------|------|--------------|
 | .NET | `backend/appsettings.json` + env | `DATABASE_CONNECTION_STRING`, `Jwt__Secret`, `Supabase__*`, `Rag__BaseUrl`, `Upload__MaxBytes`, `Cors__Origins`, `Admin__Emails` (who is a platform admin), `Admin__EstimatedCostPerQuestionUsd` (optional, for the cost estimate) |
-| Python | `rag/.env` | `GOOGLE_API_KEY`, `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`, `QDRANT_URL` (+ `QDRANT_PATH` for the CLI-only fallback), `MAX_UPLOAD_MB` |
+| Python | `rag/.env` | `RAG_API_KEY` (shared secret with the backend), `GOOGLE_API_KEY`, `EMBEDDING_PROVIDER`/`EMBEDDING_MODEL`, `QDRANT_URL` (+ `QDRANT_PATH` for the CLI-only fallback), `MAX_UPLOAD_MB` |
 | React | `frontend/.env` | `VITE_API_URL`, `VITE_MAX_UPLOAD_MB` |
+
+### Tests
+
+```bash
+cd backend.Tests && dotnet test                 # 64 tests: access rules, validation, password policy,
+                                                #   reset/verify flow, refresh-token reuse, plan limits
+cd rag && pip install -r requirements-dev.txt && pytest tests/test_service_security.py
+                                                # 14 tests: RAG service key auth, PDF error classification
+```
+
+They use an in-memory database and never touch Postgres, Supabase, Qdrant or Gemini. Stop a
+running backend before `dotnet test` (it locks the build output).
+
+### Securing it
+
+These matter as soon as anything is reachable by other people:
+
+| Setting | Where | What it does |
+|---------|-------|--------------|
+| `RAG_API_KEY` | `rag/.env` **and** `backend/.env` (same value) | The Python service refuses every call (except `/health`) without it, so nobody can read or delete Knowledge Bases by hitting port 8000. Generate one: `python -c "import secrets; print(secrets.token_urlsafe(32))"`. |
+| `Billing__AllowMockActivation` | backend | Plan changes without a payment. On automatically in Development, **off** elsewhere. Set `true` only for a demo. |
+| `Swagger__Enabled` | backend | Swagger UI. On automatically in Development, off elsewhere. |
+| `ForwardedHeaders__Enabled`, `ForwardedHeaders__KnownProxies__0` | backend | Behind a reverse proxy, trust `X-Forwarded-For` only from the listed proxy IPs. The rate limiter never trusts `X-Real-IP`. |
+| `Email__Smtp__Host` (+ `Port`, `EnableSsl`, `Username`, `Password`, `From`), `Email__AppBaseUrl` | backend | Delivers password-reset and email-verification links. Without a host the app still runs, but those emails are not sent (in Development the link is written to the backend log so you can try the flow). |
+
+`docker compose` binds Qdrant (6333) and the RAG service (8000) to `127.0.0.1` only.
+Qdrant has no authentication of its own - keep it off public networks.
 
 Never commit `.env`, API keys, `venv/`, `node_modules/`, `bin/`, `obj/`, or
 private PDFs. Each folder has a `.env.example` to copy from. Full pipeline-level
@@ -197,6 +225,25 @@ reference: [`docs/configuration.md`](docs/configuration.md).
   (older accounts get one the first time they open the app); it cannot be deleted
   or have members. Extra team workspaces, and inviting people into them, need the
   Team plan (checked against the workspace owner's plan on the server).
+- **Settings**: chunk size, overlap, top-k and the minimum similarity are stored per account
+  (`/api/settings`, Pro/Team plans) and used by the server. Models and storage are server-wide
+  and come from the server `.env`.
+- **Plan limits**: documents, storage, Knowledge Bases, questions per month and chunks are all
+  enforced. A document that fails to process does not use the document quota; one that would
+  push the account over its chunk limit is failed and its vectors removed.
+- **Lists** return at most 200 rows by default (`?page=&pageSize=`, max 500) with the full count in
+  the `X-Total-Count` header.
+- **Sessions**: refresh tokens rotate on every use. Replaying an already-rotated token (outside a
+  30-second grace window for two tabs refreshing together) ends every session for the account.
+  Changing the password does the same and hands the caller a fresh session.
+- **Account recovery**: password reset and email verification use single-use,
+  expiring tokens (only their SHA-256 is stored). Completing a reset signs the
+  account out everywhere. Verification does not block sign-in.
+- **API keys**: made on the Developer Portal, stored as SHA-256 hashes, shown once. A key acts
+  as its owner but never as a platform admin, and cannot manage keys or change the password or
+  plan (`SessionOnly` policy).
+- **Workspace access**: a team workspace's Owner is Owner of every Knowledge Base in it;
+  workspace Admins and Members get the same role on those Knowledge Bases.
 - **Migrations**: the backend applies pending EF migrations on startup
   (`DbInitializer`), so `dotnet run` against a new database is enough.
 - **Billing/teams/email**: architecturally present (schema, endpoints,
