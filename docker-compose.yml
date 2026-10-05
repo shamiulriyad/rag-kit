@@ -26,7 +26,8 @@ services:
     # that looks like an out-of-memory failure but is actually a version mismatch.
     image: qdrant/qdrant:v1.15.4
     ports:
-      - "6333:6333"
+      # Loopback only: Qdrant has no authentication, so it must not be reachable from the network.
+      - "127.0.0.1:6333:6333"
     volumes:
       - qdrant_storage:/qdrant/storage
     healthcheck:
@@ -39,7 +40,8 @@ services:
   rag:
     build: ./rag
     ports:
-      - "8000:8000"
+      # Loopback only: only the backend (inside the compose network) needs to reach this service.
+      - "127.0.0.1:8000:8000"
     env_file:
       - .env
     environment:
@@ -68,6 +70,11 @@ services:
       Jwt__Secret: ${JWT_SECRET:-}
       Rag__BaseUrl: http://rag:8000
       Rag__TimeoutSeconds: "600"
+      Rag__ApiKey: ${RAG_API_KEY:-}        # must equal the rag service's RAG_API_KEY (same .env)
+      # Hardening switches - see backend/.env.example. Mock checkout lets any user upgrade
+      # their plan for free, so it is off unless you opt in for a demo.
+      Billing__AllowMockActivation: ${ALLOW_MOCK_BILLING:-false}
+      Swagger__Enabled: ${SWAGGER_ENABLED:-false}
       Upload__MaxBytes: ${UPLOAD_MAX_BYTES:-209715200}   # ~200 MB, matches MAX_UPLOAD_MB
       Cors__Origins__0: http://localhost:5173
     volumes:
