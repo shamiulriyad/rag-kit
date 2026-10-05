@@ -17,6 +17,10 @@ public class User
     public MemberRole Role { get; set; } = MemberRole.Member;
 
     /// <summary>Set by a platform admin. A suspended user cannot sign in or refresh a session.</summary>
+    /// <summary>Set when the user proves they own <see cref="Email"/> (verification link or a
+    /// completed password reset). Null for accounts that have not done so yet.</summary>
+    public DateTimeOffset? EmailVerifiedAt { get; set; }
+
     public bool IsSuspended { get; set; }
     public DateTimeOffset? SuspendedAt { get; set; }
     public string? SuspensionReason { get; set; }
