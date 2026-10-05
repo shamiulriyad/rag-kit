@@ -13,6 +13,10 @@ public interface IAuthService
     Task<AuthResponse> LoginAsync(LoginRequest request, CancellationToken ct);
     Task<AuthResponse> RefreshAsync(string refreshTokenRaw, CancellationToken ct);
     Task LogoutAsync(string refreshTokenRaw, CancellationToken ct);
+
+    /// <summary>Changes the password, ends every other session and returns a fresh token pair for
+    /// the device that made the change.</summary>
+    Task<AuthResponse> ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken ct);
 }
 
 /// <summary>Register/login/refresh/logout. Owns password hashing and JWT issuance;
@@ -26,6 +30,8 @@ public class AuthService : IAuthService
     private readonly IActivityLogService _activity;
     private readonly ISecurityEventService _security;
     private readonly IPlatformSettingsService _platform;
+    private readonly IAccountService _account;
+    private static readonly TimeSpan ReuseGrace = TimeSpan.FromSeconds(30);
 
     public AuthService(
         AppDbContext db,
@@ -34,8 +40,10 @@ public class AuthService : IAuthService
         Microsoft.Extensions.Options.IOptions<JwtOptions> jwtOptions,
         IActivityLogService activity,
         ISecurityEventService security,
-        IPlatformSettingsService platform)
+        IPlatformSettingsService platform,
+        IAccountService account)
     {
+        _account = account;
         _db = db;
         _hasher = hasher;
         _jwt = jwt;
@@ -51,6 +59,7 @@ public class AuthService : IAuthService
             throw new ForbiddenException("New sign-ups are currently closed.");
 
         var email = request.Email.Trim().ToLowerInvariant();
+        PasswordPolicy.Validate(request.Password, email);
 
         if (await _db.Users.AnyAsync(u => u.Email == email, ct))
             throw new ConflictException("An account with this email already exists.");
@@ -75,6 +84,7 @@ public class AuthService : IAuthService
 
         await _db.SaveChangesAsync(ct);
         await _activity.LogAsync(user.Id, null, ActivityAction.UserRegistered, "User", user.Id.ToString(), ct: ct);
+        await _account.SendVerificationAfterRegisterAsync(user, ct);
 
         return await IssueTokensAsync(user, ct);
     }
@@ -109,6 +119,20 @@ public class AuthService : IAuthService
         var stored = await _db.RefreshTokens.Include(t => t.User).ThenInclude(u => u!.Plan)
             .FirstOrDefaultAsync(t => t.TokenHash == hash, ct);
 
+        if (stored?.User is not null && stored.RevokedAt is { } revokedAt && stored.ExpiresAt > DateTimeOffset.UtcNow
+            && DateTimeOffset.UtcNow - revokedAt > ReuseGrace)
+        {
+            // A token that was already rotated (or logged out) is being replayed well after the fact:
+            // either it was stolen or a client is badly out of sync. End every session for the account
+            // so the thief's copy of the newest token dies too. The short grace window covers two tabs
+            // refreshing at the same moment.
+            foreach (var t in await _db.RefreshTokens.Where(t => t.UserId == stored.UserId && t.RevokedAt == null).ToListAsync(ct))
+                t.RevokedAt = DateTimeOffset.UtcNow;
+            await _db.SaveChangesAsync(ct);
+            await _security.RecordAsync("refresh_token_reuse", stored.User.Email, "/api/auth/refresh",
+                "A revoked refresh token was replayed; all sessions for the account were ended");
+        }
+
         if (stored is null || !stored.IsActive || stored.User is null)
             throw new UnauthorizedAppException("Refresh token is invalid or has expired.");
 
@@ -133,6 +157,31 @@ public class AuthService : IAuthService
         await _db.SaveChangesAsync(ct);
     }
 
+    public async Task<AuthResponse> ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken ct)
+    {
+        var user = await _db.Users.Include(u => u.Plan).FirstOrDefaultAsync(u => u.Id == userId, ct)
+                   ?? throw new NotFoundException("User not found.");
+
+        if (!_hasher.Verify(request.CurrentPassword, user.PasswordHash))
+            throw new ValidationAppException("Current password is incorrect.");
+        if (request.NewPassword == request.CurrentPassword)
+            throw new ValidationAppException("Choose a password different from your current one.");
+        PasswordPolicy.Validate(request.NewPassword, user.Email);
+
+        var now = DateTimeOffset.UtcNow;
+        user.PasswordHash = _hasher.Hash(request.NewPassword);
+        user.UpdatedAt = now;
+
+        // Anyone holding the old password (or a session made with it) must not stay signed in.
+        foreach (var rt in await _db.RefreshTokens.Where(t => t.UserId == userId && t.RevokedAt == null).ToListAsync(ct))
+            rt.RevokedAt = now;
+        await _db.SaveChangesAsync(ct);
+        await _security.RecordAsync("password_changed", user.Email, "/api/users/me/password",
+            "Password changed; other sessions ended");
+
+        return await IssueTokensAsync(user, ct);
+    }
+
     private async Task<AuthResponse> IssueTokensAsync(User user, CancellationToken ct)
     {
         var access = _jwt.CreateAccessToken(user);
@@ -154,6 +203,7 @@ public class AuthService : IAuthService
             refreshRaw,
             new UserProfileResponse(
                 user.Id, user.Email, user.FullName, user.AvatarUrl, user.Role.ToString(),
-                plan?.Code.ToString() ?? "Free", user.CreatedAt, user.UpdatedAt, user.LastLoginAt));
+                plan?.Code.ToString() ?? "Free", user.CreatedAt, user.UpdatedAt, user.LastLoginAt,
+                user.EmailVerifiedAt is not null));
     }
 }
