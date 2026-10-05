@@ -40,3 +40,7 @@ qdrant_storage/
 .DS_Store
 Thumbs.db
 samples/*.pdf
+
+# --- Generated reports / test caches (not source) ---
+audit-report.pdf
+.pytest_cache/
