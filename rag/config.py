@@ -78,6 +78,13 @@ _qdrant_path = os.getenv("QDRANT_PATH")
 QDRANT_PATH = str(_resolve(_qdrant_path, BASE_DIR / "qdrant_data")) if _qdrant_path else None
 COLLECTION_NAME = os.getenv("COLLECTION_NAME", "pdf_rag")
 
+# --- Service authentication ----------------------------------------------
+# Shared secret the .NET backend sends as `X-Rag-Api-Key`. When set, every route
+# except GET /health requires it; when empty the service is open to anyone who can
+# reach the port (fine for a throwaway local trial, never for a deployment).
+# Generate one with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+RAG_API_KEY = os.getenv("RAG_API_KEY") or None
+
 # --- Upload (POST /ingest via the UI) ----------------------------------
 # Sensible configurable ceiling - not unlimited. The .NET layer enforces the
 # same number for the browser -> backend hop (Upload__MaxBytes).
