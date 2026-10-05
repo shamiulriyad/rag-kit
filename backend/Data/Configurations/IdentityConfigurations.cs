@@ -39,6 +39,24 @@ public class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
     }
 }
 
+public class UserTokenConfiguration : IEntityTypeConfiguration<UserToken>
+{
+    public void Configure(EntityTypeBuilder<UserToken> b)
+    {
+        b.ToTable("user_tokens");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.Purpose).IsRequired().HasMaxLength(30);
+        b.Property(x => x.TokenHash).IsRequired().HasMaxLength(128);
+        b.HasIndex(x => x.TokenHash).IsUnique();
+        b.HasIndex(x => new { x.UserId, x.Purpose });
+
+        b.HasOne(x => x.User)
+            .WithMany()
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
+    }
+}
+
 public class PlanConfiguration : IEntityTypeConfiguration<Plan>
 {
     public void Configure(EntityTypeBuilder<Plan> b)
